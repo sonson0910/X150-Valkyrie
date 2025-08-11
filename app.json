@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Valkyrie Wallet",
+    "slug": "valkyrie-cardano-wallet",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0e27"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.valkyrie.cardanowallet",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "This app uses Face ID for secure wallet access and transaction authorization.",
+        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for transactions.",
+        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to transfer transactions when offline."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0e27"
+      },
+      "package": "com.valkyrie.cardanowallet",
+      "permissions": [
+        "CAMERA",
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "ACCESS_COARSE_LOCATION",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-local-authentication",
+      "expo-camera"
+    ]
+  }
+}
