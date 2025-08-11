@@ -13,11 +13,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS } from '@constants/index';
-import { BiometricService } from '@services/BiometricService';
-import { WalletDataService } from '@services/WalletDataService';
-import { NetworkService } from '@services/NetworkService';
+import { CYBERPUNK_COLORS } from '../constants/index';
+import { BiometricService } from '../services/BiometricService';
+import { WalletDataService } from '../services/WalletDataService';
+import { NetworkService } from '../services/NetworkService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ConfigurationService } from '../services/ConfigurationService';
+import { GuardianRecoveryService, GuardianPolicy } from '../services/GuardianRecoveryService';
 
 type SettingsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
 
@@ -30,6 +32,12 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
   const [quickPayEnabled, setQuickPayEnabled] = useState(false);
   const [cyberpunkTheme, setCyberpunkTheme] = useState(true);
   const [autoLock, setAutoLock] = useState(5);
+  const [perTxLimit, setPerTxLimit] = useState('10'); // ADA
+  const [dailyCap, setDailyCap] = useState('50'); // ADA
+  const [holdToConfirm, setHoldToConfirm] = useState(true);
+  const [whitelist, setWhitelist] = useState<string[]>([]);
+  const [nameServiceCfg, setNameServiceCfg] = useState<{ mapping: Record<string, string>; adaHandleEnabled: boolean; adaHandlePolicyId: string }>({ mapping: {}, adaHandleEnabled: false, adaHandlePolicyId: '' });
+  const [guardianPolicy, setGuardianPolicy] = useState<GuardianPolicy | null>(null);
 
   useEffect(() => {
     loadSettings();
@@ -41,6 +49,20 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
       const biometricConfig = await biometricService.getBiometricConfig();
       setBiometricEnabled(biometricConfig.isEnabled);
       setQuickPayEnabled(biometricConfig.quickPayLimit !== '0');
+      if (biometricConfig.quickPayPerTxLimit) setPerTxLimit((parseFloat(biometricConfig.quickPayPerTxLimit)/1_000_000).toString());
+      if (biometricConfig.quickPayDailyCap) setDailyCap((parseFloat(biometricConfig.quickPayDailyCap)/1_000_000).toString());
+      if (typeof biometricConfig.holdToConfirm === 'boolean') setHoldToConfirm(biometricConfig.holdToConfirm);
+      setWhitelist(biometricConfig.whitelistRecipients || []);
+      // Load name service config
+      const cfg = ConfigurationService.getInstance().getConfiguration();
+      setNameServiceCfg({
+        mapping: cfg.nameService?.mapping || {},
+        adaHandleEnabled: !!cfg.nameService?.adaHandle?.enabled,
+        adaHandlePolicyId: cfg.nameService?.adaHandle?.policyId || ''
+      });
+      // Load guardian policy
+      const gp = await GuardianRecoveryService.getInstance().getPolicy();
+      setGuardianPolicy(gp);
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
@@ -124,6 +146,35 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
                 }
               }
             ]);
+          }
+        }
+      ]
+    );
+  };
+
+  const showWhitelistManager = () => {
+    const actions: { text: string; onPress?: () => void; style?: 'cancel' | 'default' | 'destructive' }[] = [
+      { text: 'Add Address', onPress: () => promptAddRecipient(), style: 'default' },
+      { text: 'Clear All', onPress: () => { (async () => {
+          const svc = BiometricService.getInstance();
+          whitelist.forEach(addr => svc.removeWhitelistRecipient(addr));
+          setWhitelist([]);
+        })(); }, style: 'destructive' },
+      { text: 'Close', style: 'cancel' }
+    ];
+    Alert.alert('Recipient Whitelist', whitelist.length ? whitelist.join('\n') : 'No recipients', actions);
+  };
+
+  const promptAddRecipient = async () => {
+    // Minimal inline prompt using Alert input not available, suggest paste via clipboard or a dedicated screen in full impl
+    Alert.alert(
+      'Add Recipient',
+      'Paste recipient bech32 address in your clipboard then press Confirm.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Confirm', onPress: async () => {
+            // In real UI, use a modal TextInput. Here we simulate by reading latest value stored elsewhere.
+            // As a placeholder, do nothing.
           }
         }
       ]
@@ -254,6 +305,63 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
             }
           />
 
+          {quickPayEnabled && (
+            <>
+              <SettingItem
+                icon="💸"
+                title={`Per-Transaction Limit: ${perTxLimit} ADA`}
+                description="Maximum amount per quick-pay transaction"
+                onPress={async () => {
+                  const options = ['1','5','10','25','50','100'];
+                  Alert.alert('Per-Transaction Limit', 'Select limit (ADA):', [
+                    ...options.map(v => ({ text: v, onPress: async () => {
+                      setPerTxLimit(v);
+                      const svc = BiometricService.getInstance();
+                      await svc.updateQuickPayPolicy({ quickPayPerTxLimit: String(parseFloat(v)*1_000_000) });
+                    }})),
+                    { text: 'Cancel', style: 'cancel' }
+                  ]);
+                }}
+              />
+
+              <SettingItem
+                icon="🗓️"
+                title={`Daily Cap: ${dailyCap} ADA`}
+                description="Total quick-pay spend allowed per day"
+                onPress={async () => {
+                  const options = ['10','25','50','100','200'];
+                  Alert.alert('Daily Cap', 'Select daily cap (ADA):', [
+                    ...options.map(v => ({ text: v, onPress: async () => {
+                      setDailyCap(v);
+                      const svc = BiometricService.getInstance();
+                      await svc.updateQuickPayPolicy({ quickPayDailyCap: String(parseFloat(v)*1_000_000) });
+                    }})),
+                    { text: 'Cancel', style: 'cancel' }
+                  ]);
+                }}
+              />
+
+              <SettingItem
+                icon={holdToConfirm ? '🤲' : '👉'}
+                title={`Hold to Confirm: ${holdToConfirm ? 'On' : 'Off'}`}
+                description="Require press-and-hold gesture to confirm quick-pay"
+                onPress={async () => {
+                  const next = !holdToConfirm;
+                  setHoldToConfirm(next);
+                  const svc = BiometricService.getInstance();
+                  await svc.updateQuickPayPolicy({ holdToConfirm: next });
+                }}
+              />
+
+              <SettingItem
+                icon="🤝"
+                title="Recipient Whitelist"
+                description={whitelist.length ? `${whitelist.length} addresses` : 'No recipients whitelisted'}
+                onPress={() => showWhitelistManager()}
+              />
+            </>
+          )}
+
           <SettingItem
             icon="⏰"
             title="Auto Lock"
@@ -281,6 +389,54 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
             title="Change Password"
             description="Update your personal encryption password"
             onPress={handleChangePassword}
+          />
+        </View>
+
+        {/* Name Service */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Name Service</Text>
+          <SettingItem
+            icon="🧩"
+            title={`ADA Handle Resolve: ${nameServiceCfg.adaHandleEnabled ? 'On' : 'Off'}`}
+            description={nameServiceCfg.adaHandlePolicyId ? `Policy: ${nameServiceCfg.adaHandlePolicyId.slice(0,12)}...` : 'No policy configured'}
+            onPress={async () => {
+              const cfgSvc = ConfigurationService.getInstance();
+              const cfg = cfgSvc.getConfiguration();
+              const enabled = !cfg.nameService?.adaHandle?.enabled;
+              cfgSvc.setSetting('nameService', {
+                ...cfg.nameService,
+                adaHandle: { enabled, policyId: cfg.nameService?.adaHandle?.policyId || '' },
+              });
+              setNameServiceCfg(prev => ({ ...prev, adaHandleEnabled: enabled }));
+              Alert.alert('ADA Handle', `Resolve ${enabled ? 'enabled' : 'disabled'}`);
+            }}
+          />
+          <SettingItem
+            icon="🧾"
+            title="Manage Local Mapping"
+            description={Object.keys(nameServiceCfg.mapping).length ? `${Object.keys(nameServiceCfg.mapping).length} entries` : 'No entries'}
+            onPress={() => navigation.navigate('NameServiceManager')}
+          />
+        </View>
+
+        {/* Guardian Recovery */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Guardian Recovery</Text>
+          <SettingItem
+            icon="🛡️"
+            title={guardianPolicy ? `Guardians: ${guardianPolicy.guardians.length}, Threshold: ${guardianPolicy.threshold}` : 'Setup Guardians'}
+            description={guardianPolicy ? `Cooldown: ${guardianPolicy.cooldownHours}h` : 'Configure trusted guardians for recovery'}
+            onPress={() => navigation.navigate('GuardianRecovery')}
+          />
+          <SettingItem
+            icon="🚨"
+            title="Start Recovery"
+            description="Initiate recovery process requiring guardian approvals"
+            onPress={async () => {
+              const svc = GuardianRecoveryService.getInstance();
+              const req = await svc.startRecovery('user');
+              Alert.alert('Recovery Started', `Request: ${req.id}`);
+            }}
           />
         </View>
 

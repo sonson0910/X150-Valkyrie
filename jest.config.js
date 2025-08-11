@@ -5,15 +5,16 @@ module.exports = {
     '^.+\\.(js|jsx|ts|tsx)$': 'babel-jest',
   },
   testRegex: '(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|tsx?)$',
-  testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/'],
+  testPathIgnorePatterns: ['/node_modules/', '/android/', '/ios/', '<rootDir>/src/__tests__/setup.ts'],
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts'],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@components/(.*)$': '<rootDir>/src/components/$1',
     '^@screens/(.*)$': '<rootDir>/src/screens/$1',
     '^@services/(.*)$': '<rootDir>/src/services/$1',
     '^@types/(.*)$': '<rootDir>/src/types/$1',
     '^@constants/(.*)$': '<rootDir>/src/constants/$1',
+    '^@contexts/(.*)$': '<rootDir>/src/contexts/$1',
   },
   collectCoverageFrom: [
     'src/**/*.{ts,tsx}',

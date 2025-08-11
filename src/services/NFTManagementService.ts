@@ -430,8 +430,7 @@ export class NFTManagementService {
     }
 
     private async signNFTTransaction(transaction: any): Promise<string> {
-        // This would integrate with cardano-serialization-lib for actual signing
-        // For now, return a placeholder signed transaction
+        // TODO: Tích hợp CardanoWalletService để ký CBOR theo đúng chuẩn
         return `signed_tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 

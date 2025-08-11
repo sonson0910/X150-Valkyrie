@@ -13,9 +13,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS } from '@constants/index';
+import { useFocusEffect } from '@react-navigation/native';
+import { CYBERPUNK_COLORS } from '../constants/index';
 import { Transaction, TransactionStatus } from '../types/wallet';
-import { CardanoAPIService } from '@services/CardanoAPIService';
+import { CardanoAPIService } from '../services/CardanoAPIService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Linking } from 'react-native';
 import { 
@@ -23,7 +24,7 @@ import {
   TransactionSkeleton,
   CyberpunkModal,
   CyberpunkButton 
-} from '@components/index';
+} from '../components/index';
 
 type TransactionHistoryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'TransactionHistory'>;
 
@@ -100,6 +101,14 @@ const TransactionHistoryScreen: React.FC<Props> = ({ navigation }) => {
   useEffect(() => {
     loadTransactions();
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      // Auto refresh when screen focused
+      loadTransactions();
+      return () => {};
+    }, [])
+  );
 
   const loadTransactions = async () => {
     try {

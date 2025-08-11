@@ -33,6 +33,10 @@ export const BLUETOOTH_CONSTANTS = {
     TX_CHARACTERISTIC_UUID: 'tx-transfer',
     DISCOVERY_TIMEOUT: 30000,
     CONNECTION_TIMEOUT: 10000,
+    CHUNK_SIZE_BLE: 180,
+    ACK_TIMEOUT_MS: 2000,
+    RESEND_LIMIT: 3,
+    PROTOCOL_VERSION: '1.0'
 } as const;
 
 export const CYBERPUNK_COLORS = {
@@ -56,4 +60,6 @@ export const STORAGE_KEYS = {
     TRANSACTIONS: 'transactions',
     OFFLINE_QUEUE: 'offline_queue',
     BIOMETRIC_ENABLED: 'biometric_enabled',
+    BIOMETRIC_CONFIG: 'biometric_config',
+    OFFLINE_SIGNED_TX_PREFIX: 'offline_signed_tx_',
 } as const;

@@ -14,13 +14,13 @@ import QRCode from 'react-native-qrcode-svg';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS } from '@constants/index';
-import { CardanoWalletService } from '@services/CardanoWalletService';
+import { CYBERPUNK_COLORS } from '../constants/index';
+import { CardanoWalletService } from '../services/CardanoWalletService';
 import { 
   CyberpunkButton, 
   CyberpunkInput, 
   CyberpunkCard 
-} from '@components/index';
+} from '../components/index';
 
 type ReceiveScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ReceiveScreen'>;
 

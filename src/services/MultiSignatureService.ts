@@ -324,6 +324,7 @@ export class MultiSignatureService {
                 });
 
                 // Submit transaction
+                // TODO: Sau khi tích hợp build & sign chuẩn, submit bằng CBOR hex thực tế
                 const result = await this.cardanoAPI.submitTransaction(transaction.id);
 
                 if (typeof result === 'string') {

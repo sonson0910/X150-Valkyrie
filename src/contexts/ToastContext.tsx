@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
-import { CYBERPUNK_COLORS } from '@constants/index';
+import { CYBERPUNK_COLORS } from '../constants/index';
 
 interface ToastContextType {
   showToast: (message: string, type?: 'success' | 'error' | 'info', duration?: number) => void;

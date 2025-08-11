@@ -26,7 +26,7 @@ export class NetworkService {
     };
     private listeners: ((state: NetworkState) => void)[] = [];
     private config: NetworkConfig = {
-        enableCertificatePinning: true,
+        enableCertificatePinning: false,
         timeout: 10000,
         retryAttempts: 3,
         retryDelay: 1000
@@ -256,13 +256,23 @@ export class NetworkService {
             }, this.config.timeout);
 
             try {
+                const { headers: optionHeaders, ...restOptions } = options;
+
+                const mergedHeaders: Record<string, any> = {
+                    ...(optionHeaders || {}),
+                };
+
+                // Set default Content-Type only when sending a body and header is not provided
+                if ((restOptions as any).body && !('Content-Type' in mergedHeaders)) {
+                    mergedHeaders['Content-Type'] = 'application/json';
+                }
+
                 const response = await fetch(url, {
-                    method: 'GET',
                     signal: controller.signal,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        ...options.headers,
-                    },
+                    // Preserve caller options (method, body, credentials, etc.)
+                    ...restOptions,
+                    method: (restOptions as any).method ?? 'GET',
+                    headers: mergedHeaders,
                 });
 
                 clearTimeout(timeoutId);

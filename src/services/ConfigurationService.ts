@@ -57,6 +57,11 @@ export interface AppConfiguration {
     environment: 'development' | 'staging' | 'production';
     version: string;
     buildNumber: string;
+    nameService?: {
+        mapping?: Record<string, string>;
+        remoteResolvers?: string[]; // list of resolver endpoints
+        adaHandle?: { enabled: boolean; policyId?: string };
+    };
 }
 
 export class ConfigurationService {
@@ -163,7 +168,12 @@ export class ConfigurationService {
             },
             environment: 'development',
             version: '1.0.0',
-            buildNumber: '1'
+            buildNumber: '1',
+            nameService: {
+                mapping: {},
+                remoteResolvers: [],
+                adaHandle: { enabled: false }
+            }
         };
     }
 

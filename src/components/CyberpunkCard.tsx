@@ -71,11 +71,11 @@ const CyberpunkCard: React.FC<CyberpunkCardProps> = ({
     }
   };
 
-  const getGradientColors = (): readonly [string, string] => {
+  const getGradientColors = (): string[] => {
     if (variant === 'glow') {
-      return [CYBERPUNK_COLORS.primary + '20', CYBERPUNK_COLORS.accent + '20'] as const;
+      return [CYBERPUNK_COLORS.primary + '20', CYBERPUNK_COLORS.accent + '20'];
     }
-    return [CYBERPUNK_COLORS.surface, CYBERPUNK_COLORS.surface] as const;
+    return [CYBERPUNK_COLORS.surface, CYBERPUNK_COLORS.surface];
   };
 
   const paddingStyles = getPaddingStyles();

@@ -15,7 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS } from '@constants/index';
+import { CYBERPUNK_COLORS } from '../constants/index';
 import { 
   DeFiStakingService, 
   StakingPool, 
@@ -23,8 +23,8 @@ import {
   GovernanceProposal,
   StakingPosition,
   LiquidityPosition
-} from '@services/DeFiStakingService';
-import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '@components/index';
+} from '../services/DeFiStakingService';
+import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '../components/index';
 
 type DeFiStakingScreenNavigationProp = StackNavigationProp<RootStackParamList, 'DeFiStaking'>;
 

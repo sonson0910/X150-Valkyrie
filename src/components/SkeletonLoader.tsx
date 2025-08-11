@@ -8,7 +8,7 @@ import {
   DimensionValue,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { CYBERPUNK_COLORS } from '@constants/index';
+import { CYBERPUNK_COLORS } from '../constants/index';
 
 interface SkeletonLoaderProps {
   width?: DimensionValue | string;

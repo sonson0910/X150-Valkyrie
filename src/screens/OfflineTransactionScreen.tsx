@@ -13,9 +13,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS } from '@constants/index';
-import { OfflineTransactionService } from '@services/OfflineTransactionService';
-import { BluetoothTransferService } from '@services/BluetoothTransferService';
+import { CYBERPUNK_COLORS } from '../constants/index';
+import { OfflineTransactionService } from '../services/OfflineTransactionService';
+import { BluetoothTransferService } from '../services/BluetoothTransferService';
+import { SecureTransferService } from '../services/SecureTransferService';
+import QRCode from 'react-native-qrcode-svg';
+import QRCodeScanner from '../components/QRCodeScanner';
+import { CardanoWalletService } from '../services/CardanoWalletService';
+import { useToast } from '../contexts/ToastContext';
 
 type OfflineTransactionScreenNavigationProp = StackNavigationProp<RootStackParamList, 'OfflineTransaction'>;
 
@@ -29,9 +34,15 @@ const OfflineTransactionScreen: React.FC<Props> = ({ navigation }) => {
   const [nearbyMerchants, setNearbyMerchants] = useState<any[]>([]);
   const [offlineQueue, setOfflineQueue] = useState<any[]>([]);
   const [isScanning, setIsScanning] = useState(false);
+  const [qrPages, setQrPages] = useState<string[]>([]);
+  const [qrSessionId, setQrSessionId] = useState<string | null>(null);
+  const [scanMode, setScanMode] = useState(false);
+  const [scanPages, setScanPages] = useState<string[]>([]);
 
   const offlineService = OfflineTransactionService.getInstance();
   const bluetoothService = BluetoothTransferService.getInstance();
+  const secureTransfer = SecureTransferService.getInstance();
+  const toast = useToast();
 
   useEffect(() => {
     loadOfflineQueue();
@@ -106,6 +117,64 @@ const OfflineTransactionScreen: React.FC<Props> = ({ navigation }) => {
     }
   };
 
+  const handleShowQRForLatest = async () => {
+    try {
+      const latest = offlineService.getOfflineQueue().find(tx => tx.signedTx);
+      if (!latest) {
+        Alert.alert('QR Export', 'No offline signed transactions.');
+        return;
+      }
+      const sessionId = `qr_${Date.now()}`;
+      setQrSessionId(sessionId);
+      const key = new Uint8Array(32); // For demo; in prod use ECDH shared key
+      const pages = await secureTransfer.buildQrPages(
+        sessionId,
+        new TextEncoder().encode(JSON.stringify({ signedTx: latest.signedTx, id: latest.id })),
+        key,
+        true
+      );
+      setQrPages(pages);
+      Alert.alert('QR Export', `Generated ${pages.length} QR pages.`);
+    } catch (e) {
+      Alert.alert('QR Error', 'Failed to generate QR pages.');
+    }
+  };
+
+  const handleStartScan = () => {
+    setScanPages([]);
+    setScanMode(true);
+  };
+
+  const handleScanQrData = async (data: string) => {
+    try {
+      if (!data.startsWith('VQR:')) return Alert.alert('Invalid QR', 'Not a Valkyrie QR frame.');
+      setScanPages(prev => [...prev, data]);
+      // Simple heuristic: attempt parse when >=3 frames or when user taps Close later
+      if (scanPages.length + 1 >= 3) {
+        const key = new Uint8Array(32); // In prod derive via ECDH/session
+        const plaintext = await secureTransfer.parseQrPages([...scanPages, data], key, true);
+        const parsed = JSON.parse(new TextDecoder().decode(plaintext));
+        if (parsed?.signedTx) {
+          setScanMode(false);
+          // Submit immediately
+          const wallet = CardanoWalletService.getInstance();
+          try {
+            const txHash = await wallet.submitTransaction(parsed.signedTx);
+            toast.showToast(`Submitted: ${txHash}`, 'success');
+            const network = wallet.getCurrentNetwork().name as 'mainnet' | 'testnet';
+            navigation.navigate('SubmitResult', { txHash, network });
+          } catch (e) {
+            toast.showToast('Submit failed', 'error');
+          }
+        } else {
+          toast.showToast('Invalid payload', 'error');
+        }
+      }
+    } catch (e) {
+      toast.showToast('Failed to parse QR frames', 'error');
+    }
+  };
+
   return (
     <LinearGradient
       colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
@@ -171,6 +240,15 @@ const OfflineTransactionScreen: React.FC<Props> = ({ navigation }) => {
           ) : (
             <Text style={styles.emptyText}>No merchants found nearby</Text>
           )}
+
+          <TouchableOpacity style={[styles.scanButton, { marginTop: 12 }]} onPress={handleStartScan}>
+            <Text style={styles.scanButtonText}>Scan QR (Import)</Text>
+          </TouchableOpacity>
+          {scanMode && (
+            <View style={{ marginTop: 12 }}>
+              <QRCodeScanner onScan={handleScanQrData} onClose={() => setScanMode(false)} />
+            </View>
+          )}
         </View>
 
         {/* Offline Queue */}
@@ -191,6 +269,25 @@ const OfflineTransactionScreen: React.FC<Props> = ({ navigation }) => {
             ))
           ) : (
             <Text style={styles.emptyText}>No offline transactions</Text>
+          )}
+
+          {offlineQueue.length > 0 && (
+            <TouchableOpacity style={[styles.syncButton, { marginTop: 12 }]} onPress={handleShowQRForLatest}>
+              <Text style={styles.syncButtonText}>Show QR for Latest</Text>
+            </TouchableOpacity>
+          )}
+          {qrPages.length > 0 && (
+            <View style={{ alignItems: 'center', marginTop: 12 }}>
+              <Text style={{ color: CYBERPUNK_COLORS.text, marginBottom: 8 }}>QR Pages ({qrPages.length})</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {qrPages.map((p, i) => (
+                  <View key={`qr_${i}`} style={{ marginRight: 12, alignItems: 'center' }}>
+                    <QRCode value={p} size={140} backgroundColor="transparent" color={CYBERPUNK_COLORS.text} />
+                    <Text style={{ color: CYBERPUNK_COLORS.textSecondary, marginTop: 6 }}>Page {i + 1}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -216,24 +313,73 @@ const MerchantItem: React.FC<{ merchant: any }> = ({ merchant }) => (
   </TouchableOpacity>
 );
 
-const OfflineTransactionItem: React.FC<{ transaction: any }> = ({ transaction }) => (
-  <View style={styles.transactionItem}>
-    <View style={styles.transactionIcon}>
-      <Text style={styles.transactionIconText}>
-        {transaction.status === 'queued' ? '⏳' : 
-         transaction.status === 'failed' ? '❌' : '✅'}
+const OfflineTransactionItem: React.FC<{ transaction: any }> = ({ transaction }) => {
+  const ttl: number | undefined = transaction?.metadata?.ttl;
+  const [isExpired, setIsExpired] = React.useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!ttl) { setIsExpired(false); return; }
+        // Use require to avoid TS dynamic import target
+        const apiModule = require('../services/CardanoAPIService');
+        const api = apiModule.CardanoAPIService.getInstance();
+        const latest = await api.getLatestBlock();
+        const currentSlot = latest.slot || 0;
+        if (!cancelled) setIsExpired(currentSlot > ttl);
+      } catch {
+        if (!cancelled) setIsExpired(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [ttl]);
+  const retryTx = async (tx: any) => {
+    try {
+      const service = OfflineTransactionService.getInstance();
+      await service.retryTransaction(tx.id);
+      Alert.alert('Retry', 'Transaction marked for retry.');
+    } catch {
+      Alert.alert('Retry', 'Failed to mark transaction for retry.');
+    }
+  };
+
+  const cancelTx = async (tx: any) => {
+    try {
+      const service = OfflineTransactionService.getInstance();
+      await service.removeFromOfflineQueue(tx.id);
+      Alert.alert('Cancel', 'Transaction removed from queue.');
+    } catch {
+      Alert.alert('Cancel', 'Failed to remove transaction.');
+    }
+  };
+
+  return (
+    <View style={styles.transactionItem}>
+      <View style={styles.transactionIcon}>
+        <Text style={styles.transactionIconText}>
+          {transaction.status === 'queued' ? '⏳' :
+          transaction.status === 'failed' ? '❌' : '✅'}
+        </Text>
+      </View>
+      <View style={styles.transactionDetails}>
+        <Text style={styles.transactionAmount}>{transaction.amount} ADA</Text>
+        <Text style={styles.transactionAddress}>{transaction.to}</Text>
+        <Text style={styles.transactionStatus}>{transaction.status}{isExpired ? ' (expired)' : ''}</Text>
+      </View>
+      <Text style={styles.transactionTime}>
+        {new Date(transaction.timestamp).toLocaleDateString()}
       </Text>
+      <View style={{ marginLeft: 10 }}>
+        <TouchableOpacity style={[styles.payButton, { backgroundColor: CYBERPUNK_COLORS.accent, marginBottom: 6 }]} onPress={() => retryTx(transaction)}>
+          <Text style={styles.payButtonText}>Retry</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.payButton, { backgroundColor: CYBERPUNK_COLORS.error }]} onPress={() => cancelTx(transaction)}>
+          <Text style={styles.payButtonText}>Cancel</Text>
+        </TouchableOpacity>
+      </View>
     </View>
-    <View style={styles.transactionDetails}>
-      <Text style={styles.transactionAmount}>{transaction.amount} ADA</Text>
-      <Text style={styles.transactionAddress}>{transaction.to}</Text>
-      <Text style={styles.transactionStatus}>{transaction.status}</Text>
-    </View>
-    <Text style={styles.transactionTime}>
-      {new Date(transaction.timestamp).toLocaleDateString()}
-    </Text>
-  </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   container: {

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Transaction, TransactionStatus } from '../types/wallet';
-import { STORAGE_KEYS } from '@constants/index';
+import { STORAGE_KEYS } from '../constants/index';
 import { CardanoWalletService } from './CardanoWalletService';
 import { NetworkService } from './NetworkService';
 import { ErrorHandler, ErrorType, ErrorSeverity } from './ErrorHandler';
@@ -14,6 +14,7 @@ export class OfflineTransactionService {
     private offlineQueue: Transaction[] = [];
     private walletService: CardanoWalletService;
     private syncInterval?: NodeJS.Timeout;
+    private ttlMonitorInterval?: NodeJS.Timeout;
 
     constructor() {
         this.walletService = CardanoWalletService.getInstance();
@@ -34,6 +35,7 @@ export class OfflineTransactionService {
         try {
             await this.loadOfflineQueue();
             this.startAutoSync();
+            this.startTTLMonitor();
 
             console.log('Offline transaction service initialized');
             return true;
@@ -75,6 +77,9 @@ export class OfflineTransactionService {
 
             // Ký transaction offline
             const signedTx = await this.walletService.signTransaction(transaction, accountIndex);
+
+            // Gắn signedTx vào transaction để có thể sync sau này
+            transaction.signedTx = signedTx;
 
             // Thêm vào offline queue
             await this.addToOfflineQueue(transaction);
@@ -391,12 +396,72 @@ export class OfflineTransactionService {
     }
 
     /**
+     * Theo dõi TTL và tự động rebuild các giao dịch sắp hết hạn
+     */
+    private startTTLMonitor(interval: number = 20000): void {
+        if (this.ttlMonitorInterval) {
+            clearInterval(this.ttlMonitorInterval);
+        }
+        this.ttlMonitorInterval = setInterval(async () => {
+            try {
+                const expiring = this.offlineQueue.filter(tx => tx.status === TransactionStatus.OFFLINE_SIGNED || tx.status === TransactionStatus.QUEUED);
+                if (expiring.length === 0) return;
+
+                const apiModule = require('./CardanoAPIService');
+                const api = apiModule.CardanoAPIService.getInstance();
+                const latest = await api.getLatestBlock();
+                const currentSlot: number = latest?.slot || 0;
+
+                for (const tx of expiring) {
+                    const ttl: number | undefined = tx.metadata?.ttl;
+                    if (!ttl) continue;
+                    // Nếu còn < 5 phút (~300 slots tuỳ epoch config), rebuild
+                    if (ttl - currentSlot <= 300) {
+                        try {
+                            // Giữ nguyên các tham số gốc
+                            const rebuilt = await this.walletService.buildTransaction(
+                                tx.from,
+                                tx.to,
+                                tx.amount,
+                                { ...(tx.metadata || {}) },
+                                tx.assets
+                            );
+                            rebuilt.isOffline = true;
+                            rebuilt.status = TransactionStatus.OFFLINE_SIGNED;
+                            // Ký lại
+                            const signed = await this.walletService.signTransaction(rebuilt);
+                            rebuilt.signedTx = signed;
+                            // Thay thế trong queue
+                            await this.addToOfflineQueue(rebuilt);
+                            // Xoá bản cũ
+                            await this.removeFromOfflineQueue(tx.id);
+                            console.log('Rebuilt expiring offline tx:', tx.id, '->', rebuilt.id);
+                        } catch (rebuildErr) {
+                            console.warn('Failed to rebuild expiring tx', tx.id, rebuildErr);
+                        }
+                    }
+                }
+            } catch (e) {
+                // ignore monitor errors
+            }
+        }, interval);
+    }
+
+    stopTTLMonitor(): void {
+        if (this.ttlMonitorInterval) {
+            clearInterval(this.ttlMonitorInterval);
+            this.ttlMonitorInterval = undefined;
+        }
+    }
+
+    /**
      * Cleanup service
      * @returns Success status
      */
     async cleanup(): Promise<boolean> {
         try {
             this.stopAutoSync();
+            this.stopTTLMonitor();
             await this.saveOfflineQueue();
 
             console.log('Offline transaction service cleaned up');

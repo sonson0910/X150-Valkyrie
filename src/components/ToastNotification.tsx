@@ -72,18 +72,18 @@ const ToastNotification: React.FC<ToastProps> = ({
     });
   };
 
-  const getToastColors = (): readonly [string, string] => {
+  const getToastColors = (): string[] => {
     switch (type) {
       case 'success':
-        return [CYBERPUNK_COLORS.success, '#00cc88'] as const;
+        return [CYBERPUNK_COLORS.success, '#00cc88'];
       case 'error':
-        return [CYBERPUNK_COLORS.error, '#ff6b6b'] as const;
+        return [CYBERPUNK_COLORS.error, '#ff6b6b'];
       case 'warning':
-        return [CYBERPUNK_COLORS.warning, '#ffa726'] as const;
+        return [CYBERPUNK_COLORS.warning, '#ffa726'];
       case 'info':
-        return [CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent] as const;
+        return [CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent];
       default:
-        return [CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent] as const;
+        return [CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent];
     }
   };
 

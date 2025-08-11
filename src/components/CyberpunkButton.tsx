@@ -39,22 +39,22 @@ const CyberpunkButton: React.FC<CyberpunkButtonProps> = ({
     onPress();
   };
 
-  const getGradientColors = (): readonly [string, string] => {
+  const getGradientColors = (): string[] => {
     if (disabled) {
-      return [CYBERPUNK_COLORS.border, CYBERPUNK_COLORS.border] as const;
+      return [CYBERPUNK_COLORS.border, CYBERPUNK_COLORS.border];
     }
     
     switch (variant) {
       case 'primary':
-        return [CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent] as const;
+        return [CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent];
       case 'secondary':
-        return [CYBERPUNK_COLORS.surface, CYBERPUNK_COLORS.border] as const;
+        return [CYBERPUNK_COLORS.surface, CYBERPUNK_COLORS.border];
       case 'outline':
-        return [CYBERPUNK_COLORS.background, CYBERPUNK_COLORS.background] as const;
+        return [CYBERPUNK_COLORS.background, CYBERPUNK_COLORS.background];
       case 'danger':
-        return [CYBERPUNK_COLORS.error, '#ff6b6b'] as const;
+        return [CYBERPUNK_COLORS.error, '#ff6b6b'];
       default:
-        return [CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent] as const;
+        return [CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent];
     }
   };
 

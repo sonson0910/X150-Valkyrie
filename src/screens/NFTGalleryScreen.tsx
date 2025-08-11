@@ -16,9 +16,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS } from '@constants/index';
-import { NFTManagementService, NFTAsset, NFTMetadata } from '@services/NFTManagementService';
-import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '@components/index';
+import { CYBERPUNK_COLORS } from '../constants/index';
+import { NFTManagementService, NFTAsset, NFTMetadata } from '../services/NFTManagementService';
+import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '../components/index';
 
 type NFTGalleryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'NFTGallery'>;
 

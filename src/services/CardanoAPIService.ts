@@ -1,4 +1,4 @@
-import { CARDANO_NETWORKS } from '@constants/index';
+import { CARDANO_NETWORKS } from '../constants/index';
 import { ConfigurationService } from './ConfigurationService';
 import { NetworkService } from './NetworkService';
 import { ErrorHandler, ErrorSeverity, ErrorType } from './ErrorHandler';
@@ -77,7 +77,6 @@ export class CardanoAPIService {
                 ...options,
                 headers: {
                     'project_id': projectId,
-                    'Content-Type': 'application/json',
                     ...options.headers,
                 },
             });
@@ -459,6 +458,16 @@ export class CardanoAPIService {
         }
     }
 
+    async getAssetAddresses(assetId: string): Promise<Array<{ address: string; quantity: string }>> {
+        try {
+            const response = await this.apiCall<any[]>(`/assets/${assetId}/addresses?count=1`);
+            return (response || []).map(r => ({ address: r.address, quantity: r.quantity }));
+        } catch (error) {
+            console.error('Failed to get asset addresses:', error);
+            return [];
+        }
+    }
+
     async getPolicyAssets(policyId: string): Promise<any[]> {
         try {
             const response = await this.apiCall<any[]>(`/assets/policy/${policyId}`);
@@ -473,7 +482,8 @@ export class CardanoAPIService {
     async getAddressBalance(address: string): Promise<string> {
         try {
             const response = await this.apiCall<any>(`/addresses/${address}`);
-            return (response as any)?.amount || '0';
+            const adaEntry = Array.isArray(response?.amount) ? response.amount.find((a: any) => a.unit === 'lovelace') : null;
+            return adaEntry ? adaEntry.quantity : '0';
         } catch (error) {
             console.error('Failed to get address balance:', error);
             return '0';

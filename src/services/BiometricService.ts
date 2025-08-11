@@ -1,14 +1,22 @@
 import ReactNativeBiometrics, { BiometryTypes } from 'react-native-biometrics';
 import { EncryptedMnemonic } from '../types/wallet';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { STORAGE_KEYS } from '../constants/index';
 import * as Haptics from 'expo-haptics';
 
 export interface BiometricConfig {
     isEnabled: boolean;
     type: 'fingerprint' | 'face' | 'none';
+    // Legacy per-tx limit (lovelace) for backward compat
     quickPayLimit: string;
     timeout: number;
+    // Extended quick-pay policy
+    quickPayPerTxLimit?: string; // lovelace
+    quickPayDailyCap?: string; // lovelace per calendar day
+    quickPayDailySpent?: { date: string; amount: string }; // track spent per day
+    whitelistRecipients?: string[]; // bech32 addresses
+    holdToConfirm?: boolean;
+    idleTimeoutMs?: number; // re-authenticate if idle longer
 }
 
 export class BiometricService {
@@ -20,8 +28,14 @@ export class BiometricService {
         this.config = {
             isEnabled: false,
             type: 'none',
-            quickPayLimit: '10000000', // 10 ADA
+            quickPayLimit: '10000000', // legacy 10 ADA
             timeout: 30000, // 30 seconds
+            quickPayPerTxLimit: '10000000', // 10 ADA default
+            quickPayDailyCap: '50000000', // 50 ADA/day
+            quickPayDailySpent: { date: new Date().toISOString().slice(0, 10), amount: '0' },
+            whitelistRecipients: [],
+            holdToConfirm: true,
+            idleTimeoutMs: 120000, // 2 minutes
         };
         this.rnBiometrics = new ReactNativeBiometrics();
     }
@@ -127,17 +141,28 @@ export class BiometricService {
         error?: string;
     }> {
         try {
-            const amountNum = parseFloat(amount);
-            const limitNum = parseFloat(quickPayLimit);
+            // Reset daily spent if day changed
+            this.resetDailySpentIfNewDay();
 
-            if (amountNum <= limitNum) {
-                // Quick authentication for small amounts
-                const result = await this.authenticateWithBiometric(`Quick Pay ${amount} ADA`);
-                return { ...result, requireFullAuth: false };
-            } else {
-                // Full authentication required for large amounts
-                return { success: false, requireFullAuth: true, error: 'Amount exceeds quick pay limit' };
+            const amountNum = parseFloat(amount);
+            const perTxLimit = parseFloat(this.config.quickPayPerTxLimit || this.config.quickPayLimit || '0');
+            const dailyCap = parseFloat(this.config.quickPayDailyCap || '0');
+            const dailySpent = parseFloat(this.config.quickPayDailySpent?.amount || '0');
+
+            if (perTxLimit > 0 && amountNum > perTxLimit) {
+                return { success: false, requireFullAuth: true, error: 'Amount exceeds per-transaction limit' };
             }
+            if (dailyCap > 0 && (dailySpent + amountNum) > dailyCap) {
+                return { success: false, requireFullAuth: true, error: 'Daily quick pay cap reached' };
+            }
+
+            // Quick biometric prompt
+            const result = await this.authenticateWithBiometric(`Quick Pay ${amount} ADA`);
+            if (result.success) {
+                // Accumulate daily spent
+                this.incrementDailySpent(amountNum);
+            }
+            return { ...result, requireFullAuth: false };
         } catch (error) {
             console.error('Quick pay authentication error:', error);
             return { success: false, requireFullAuth: true, error: 'Quick pay failed' };
@@ -145,11 +170,54 @@ export class BiometricService {
     }
 
     /**
+     * Update quick pay policy
+     */
+    async updateQuickPayPolicy(updates: Partial<Pick<BiometricConfig,
+        'quickPayPerTxLimit' | 'quickPayDailyCap' | 'whitelistRecipients' | 'holdToConfirm' | 'idleTimeoutMs'>>): Promise<void> {
+        this.config = { ...this.config, ...updates };
+        await this.saveBiometricConfig();
+    }
+
+    addWhitelistRecipient(address: string): void {
+        const set = new Set(this.config.whitelistRecipients || []);
+        set.add(address);
+        this.config.whitelistRecipients = Array.from(set);
+        this.saveBiometricConfig();
+    }
+
+    removeWhitelistRecipient(address: string): void {
+        const list = (this.config.whitelistRecipients || []).filter(a => a !== address);
+        this.config.whitelistRecipients = list;
+        this.saveBiometricConfig();
+    }
+
+    getWhitelistRecipients(): string[] {
+        return [...(this.config.whitelistRecipients || [])];
+    }
+
+    private resetDailySpentIfNewDay(): void {
+        const today = new Date().toISOString().slice(0, 10);
+        if (!this.config.quickPayDailySpent || this.config.quickPayDailySpent.date !== today) {
+            this.config.quickPayDailySpent = { date: today, amount: '0' };
+            // async but fire-and-forget
+            this.saveBiometricConfig();
+        }
+    }
+
+    private incrementDailySpent(amountAda: number): void {
+        this.resetDailySpentIfNewDay();
+        const current = parseFloat(this.config.quickPayDailySpent?.amount || '0');
+        const next = current + amountAda;
+        this.config.quickPayDailySpent = { date: new Date().toISOString().slice(0, 10), amount: String(next) };
+        this.saveBiometricConfig();
+    }
+
+    /**
      * Lấy cấu hình sinh trắc học
      */
     async getBiometricConfig(): Promise<BiometricConfig> {
         try {
-            const stored = await SecureStore.getItemAsync('biometric_config');
+            const stored = await SecureStore.getItemAsync(STORAGE_KEYS.BIOMETRIC_CONFIG);
             if (stored) {
                 this.config = { ...this.config, ...JSON.parse(stored) };
             }
@@ -189,7 +257,7 @@ export class BiometricService {
      */
     private async saveBiometricConfig(): Promise<void> {
         try {
-            await SecureStore.setItemAsync('biometric_config', JSON.stringify(this.config));
+            await SecureStore.setItemAsync(STORAGE_KEYS.BIOMETRIC_CONFIG, JSON.stringify(this.config));
         } catch (error) {
             console.error('Failed to save biometric config:', error);
         }

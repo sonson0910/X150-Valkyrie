@@ -107,23 +107,24 @@ export class ErrorHandler {
         try {
             // Enable Sentry integration
             try {
-                const Sentry = require('@sentry/react-native');
-                Sentry.init({
-                    dsn: process.env.SENTRY_DSN || 'https://your-sentry-dsn-here.sentry.io/project-id',
-                    environment: 'production',
-                    enableAutoSessionTracking: true,
-                    debug: false,
-                    beforeSend: (event: any) => {
-                        // Filter out sensitive information
-                        if (event.user) {
-                            delete event.user.ip_address;
-                            delete event.user.email;
-                        }
-                        return event;
-                    }
-                });
+                // Comment out Sentry for web compatibility
+                // const Sentry = require('@sentry/react-native');
+                // Sentry.init({
+                //     dsn: process.env.SENTRY_DSN || 'https://your-sentry-dsn-here.sentry.io/project-id',
+                //     environment: 'production',
+                //     enableAutoSessionTracking: true,
+                //     debug: false,
+                //     beforeSend: (event: any) => {
+                //         // Filter out sensitive information
+                //         if (event.user) {
+                //             delete event.user.ip_address;
+                //             delete event.user.email;
+                //         }
+                //         return event;
+                //     }
+                // });
 
-                console.log('Production mode - Sentry integration enabled');
+                console.log('Production mode - Sentry integration disabled for web compatibility');
             } catch (sentryError) {
                 console.warn('Failed to initialize Sentry:', sentryError);
             }

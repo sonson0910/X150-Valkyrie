@@ -1,5 +1,6 @@
 import { BluetoothTransaction, Transaction, TransactionStatus } from '../types/wallet';
-import { BLUETOOTH_CONSTANTS } from '@constants/index';
+import { BLUETOOTH_CONSTANTS } from '../constants/index';
+import { SecureTransferService } from './SecureTransferService';
 
 // BLE Manager interface for type safety
 interface BLEManager {
@@ -33,6 +34,9 @@ export class BluetoothTransferService {
     private isScanning: boolean = false;
     private isAdvertising: boolean = false;
     private connectedDevices: Map<string, BLEDevice> = new Map();
+    private secure = SecureTransferService.getInstance();
+    private ackWaiters: Map<string, Map<number, { resolve: () => void; reject: (err: any) => void }>> = new Map();
+    private incomingSessions: Map<string, { total: number; frames: Map<number, string> }> = new Map();
 
     static getInstance(): BluetoothTransferService {
         if (!BluetoothTransferService.instance) {
@@ -393,8 +397,22 @@ export class BluetoothTransferService {
                 }
             };
 
-            // Simulate Bluetooth transfer
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            // ECDH key agreement (ephemeral)
+            const sessionId = `sess_${Date.now()}`;
+            const myKeyPair = await this.secure.generateEphemeralKeyPair();
+            // In real flow, send myKeyPair.publicKeyHex to merchant and receive peer public key
+            const peerKey = myKeyPair.publicKeyRaw; // placeholder self-use
+            const sharedKey = await this.secure.deriveSharedKey(myKeyPair.privateKey, peerKey);
+            const frames = await this.secure.buildFrames(
+                sessionId,
+                new TextEncoder().encode(JSON.stringify(bluetoothTx)),
+                sharedKey,
+                true
+            );
+
+            // Send frames with ACK/resume
+            const device = this.connectedDevices.get(merchantId)!;
+            await this.sendFramesWithAck(device, sessionId, frames);
 
             // Mock merchant confirmation
             const merchantConfirmation = `confirmation_${Date.now()}`;
@@ -409,6 +427,58 @@ export class BluetoothTransferService {
         } catch (error) {
             console.error('Failed to send transaction to merchant:', error);
             return { success: false };
+        }
+    }
+
+    private onAckReceived(sessionId: string, idx: number): void {
+        const bySession = this.ackWaiters.get(sessionId);
+        if (!bySession) return;
+        const waiter = bySession.get(idx);
+        if (waiter) {
+            waiter.resolve();
+            bySession.delete(idx);
+        }
+    }
+
+    private async awaitAck(sessionId: string, idx: number): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            if (!this.ackWaiters.has(sessionId)) this.ackWaiters.set(sessionId, new Map());
+            const bySession = this.ackWaiters.get(sessionId)!;
+            bySession.set(idx, { resolve, reject });
+            setTimeout(() => {
+                const w = bySession.get(idx);
+                if (w) {
+                    bySession.delete(idx);
+                    reject(new Error('ACK timeout'));
+                }
+            }, BLUETOOTH_CONSTANTS.ACK_TIMEOUT_MS);
+        });
+    }
+
+    private async sendFramesWithAck(device: BLEDevice, sessionId: string, frames: string[]): Promise<void> {
+        for (let i = 0; i < frames.length; i++) {
+            const frame = frames[i];
+            let attempts = 0;
+            while (attempts <= BLUETOOTH_CONSTANTS.RESEND_LIMIT) {
+                // Write frame
+                const data = new TextEncoder().encode(frame);
+                await device.writeCharacteristicWithResponseForService(
+                    BLUETOOTH_CONSTANTS.SERVICE_UUID,
+                    BLUETOOTH_CONSTANTS.TX_CHARACTERISTIC_UUID,
+                    data
+                );
+                // In mock, auto-ACK shortly after write
+                setTimeout(() => this.onAckReceived(sessionId, i), 15);
+                try {
+                    await this.awaitAck(sessionId, i);
+                    break; // proceed next frame
+                } catch (e) {
+                    attempts += 1;
+                    if (attempts > BLUETOOTH_CONSTANTS.RESEND_LIMIT) {
+                        throw new Error(`Failed to deliver frame ${i}`);
+                    }
+                }
+            }
         }
     }
 
@@ -464,20 +534,21 @@ export class BluetoothTransferService {
 
             console.log('Started listening for transactions');
 
-            // Mock received transaction sau 5 giây
-            setTimeout(() => {
-                const mockTransaction: BluetoothTransaction = {
-                    id: 'bt_tx_received_123',
-                    signedTx: 'signed_tx_data_here',
-                    metadata: {
-                        amount: '5000000',
-                        recipient: 'addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer3n0d3vllmyqwsx5wktcd8cc3sq835lu7drv2xwl2wywfgs',
-                        timestamp: new Date()
-                    }
-                };
-
-                onTransactionReceived(mockTransaction);
-            }, 5000);
+            // Mock received transaction sau 2 giây: parse frames
+            setTimeout(async () => {
+                try {
+                    // In reality, frames would come from BLE notifications, here we self-generate
+                    const mock = { id: 'bt_tx_received_123', signedTx: 'signed_tx_data_here', metadata: { amount: '5000000', recipient: 'addr1q...', timestamp: new Date() } } as BluetoothTransaction;
+                    const sessionId = 'sess_demo';
+                    const key = crypto.getRandomValues ? crypto.getRandomValues(new Uint8Array(32)) : new Uint8Array(32);
+                    const frames = await this.secure.buildFrames(sessionId, new TextEncoder().encode(JSON.stringify(mock)), key, true);
+                    const plaintext = await this.secure.parseFrames(frames, key, true);
+                    const txParsed = JSON.parse(new TextDecoder().decode(plaintext));
+                    onTransactionReceived(txParsed);
+                } catch (e) {
+                    console.error('Mock receive failed:', e);
+                }
+            }, 2000);
 
             return true;
 

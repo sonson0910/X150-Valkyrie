@@ -12,11 +12,12 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS } from '@constants/index';
-import { BiometricService } from '@services/BiometricService';
-import { MnemonicEncryptionService } from '@services/MnemonicEncryptionService';
+import { CYBERPUNK_COLORS, STORAGE_KEYS } from '../constants/index';
+import { BiometricService } from '../services/BiometricService';
+import { MnemonicEncryptionService } from '../services/MnemonicEncryptionService';
 
 type WelcomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Welcome'>;
 
@@ -33,6 +34,8 @@ const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
   const [hasExistingWallet, setHasExistingWallet] = useState(false);
 
   useEffect(() => {
+    console.log('WelcomeScreen mounted');
+    
     // Animated intro
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -63,13 +66,22 @@ const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
       ])
     ).start();
 
-    checkExistingWallet();
+    // Only check wallet on mobile, not on web
+    if (typeof window === 'undefined') {
+      console.log('Running on mobile, checking existing wallet...');
+      checkExistingWallet();
+    } else {
+      console.log('Running on web, skipping wallet check to prevent auto-redirect');
+      setHasExistingWallet(false);
+    }
   }, []);
 
   const checkExistingWallet = async () => {
     try {
+      console.log('Checking existing wallet...');
       // Check if wallet already exists in secure storage
       const walletExists = await checkWalletInStorage();
+      console.log('Wallet exists:', walletExists);
       setHasExistingWallet(walletExists);
     } catch (error) {
       console.error('Failed to check existing wallet:', error);
@@ -80,27 +92,39 @@ const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
   // Check wallet existence in secure storage
   const checkWalletInStorage = async (): Promise<boolean> => {
     try {
-      const keys = [
-        'wallet_encrypted_mnemonic',
-        'wallet_public_key',
-        'wallet_private_key',
-        'current_wallet_address'
-      ];
+      console.log('Checking wallet storage...');
       
-      for (const key of keys) {
-        const data = await AsyncStorage.getItem(key);
-        if (data) {
+      // Skip on web to prevent auto-redirect
+      if (typeof window !== 'undefined') {
+        console.log('Skipping storage check on web');
+        return false;
+      }
+      
+      // Check secure data first
+      const encrypted = await SecureStore.getItemAsync(STORAGE_KEYS.ENCRYPTED_MNEMONIC);
+      if (encrypted) {
+        console.log('Found encrypted mnemonic in secure store');
+        return true;
+      }
+
+      // Then check public, non-sensitive items if any were stored
+      const accounts = await SecureStore.getItemAsync(STORAGE_KEYS.ACCOUNTS);
+      if (accounts) {
+        console.log('Found accounts in secure store');
+        return true;
+      }
+      
+      // Check biometric config (skip on web)
+      if (typeof window === 'undefined') {
+        const biometricService = BiometricService.getInstance();
+        const biometricConfig = await biometricService.getBiometricConfig();
+        if (biometricConfig.isEnabled) {
+          console.log('Biometric enabled');
           return true;
         }
       }
       
-      // Check biometric config
-      const biometricService = BiometricService.getInstance();
-      const biometricConfig = await biometricService.getBiometricConfig();
-      if (biometricConfig.isEnabled) {
-        return true;
-      }
-      
+      console.log('No existing wallet found');
       return false;
     } catch (error) {
       console.error('Failed to check wallet storage:', error);
@@ -109,13 +133,61 @@ const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const handleCreateWallet = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate('SetupWallet');
+    try {
+      console.log('Create Wallet button pressed');
+      console.log('Navigation object:', navigation);
+      
+      // Check if we're on web
+      if (typeof window !== 'undefined') {
+        console.log('Running on web platform');
+      }
+      
+      // Try haptics (may not work on web)
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        console.log('Haptics triggered');
+      } catch (hapticError) {
+        console.warn('Haptics failed (expected on web):', hapticError);
+      }
+      
+      console.log('Navigating to SetupWallet...');
+      navigation.navigate('SetupWallet');
+      console.log('Navigation completed');
+    } catch (error) {
+      console.error('Create Wallet failed:', error);
+      // Fallback: try direct navigation
+      try {
+        navigation.navigate('SetupWallet');
+      } catch (navError) {
+        console.error('Direct navigation also failed:', navError);
+      }
+    }
   };
 
   const handleRestoreWallet = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    navigation.navigate('RestoreWallet');
+    try {
+      console.log('Restore Wallet button pressed');
+      
+      // Try haptics (may not work on web)
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        console.log('Haptics triggered');
+      } catch (hapticError) {
+        console.warn('Haptics failed (expected on web):', hapticError);
+      }
+      
+      console.log('Navigating to RestoreWallet...');
+      navigation.navigate('RestoreWallet');
+      console.log('Navigation completed');
+    } catch (error) {
+      console.error('Restore Wallet failed:', error);
+      // Fallback: try direct navigation
+      try {
+        navigation.navigate('RestoreWallet');
+      } catch (navError) {
+        console.error('Direct navigation also failed:', navError);
+      }
+    }
   };
 
   const handleUnlockWallet = async () => {

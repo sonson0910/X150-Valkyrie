@@ -16,10 +16,11 @@ import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS, STORAGE_KEYS } from '@constants/index';
-import { CardanoWalletService } from '@services/CardanoWalletService';
-import { MnemonicEncryptionService } from '@services/MnemonicEncryptionService';
-import { BiometricService } from '@services/BiometricService';
+import { CYBERPUNK_COLORS, STORAGE_KEYS } from '../constants/index';
+import { CardanoWalletService } from '../services/CardanoWalletService';
+import { MnemonicEncryptionService } from '../services/MnemonicEncryptionService';
+import MnemonicTransformService from '../services/MnemonicTransformService';
+import { BiometricService } from '../services/BiometricService';
 
 type SetupWalletScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SetupWallet'>;
 
@@ -41,59 +42,120 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
 
   useEffect(() => {
     if (step === 2) {
+      console.log('Step 2 reached, generating mnemonic...');
       generateNewMnemonic();
     }
   }, [step]);
 
   const generateNewMnemonic = () => {
-    const mnemonic = CardanoWalletService.generateMnemonic(128); // 12 words
+    console.log('Generating original mnemonic...');
+    // Generate a real 24-word mnemonic
+    const mnemonic = CardanoWalletService.generateMnemonic(256);
     setOriginalMnemonic(mnemonic);
+    console.log('Original mnemonic set');
+  };
+
+  const generateFakeMnemonic = () => {
+    console.log('Generating fake encrypted mnemonic...');
+    // Generate a realistic 12-word encrypted mnemonic
+    const demoFakeMnemonic = 'crystal quantum neural matrix vortex pulse shadow fractal nexus prism orbit stellar';
+    setFakeMnemonic(demoFakeMnemonic);
+    console.log('Fake mnemonic set:', demoFakeMnemonic);
   };
 
   const validatePassword = () => {
+    console.log('Validating password...');
+    console.log('Password length:', userPassword.length);
+    console.log('Passwords match:', userPassword === confirmPassword);
+    
     if (userPassword.length < 8) {
+      console.log('Password too short');
       Alert.alert('Password Error', 'Password must be at least 8 characters long');
       return false;
     }
     
     if (userPassword !== confirmPassword) {
+      console.log('Passwords do not match');
       Alert.alert('Password Error', 'Passwords do not match');
       return false;
     }
     
+    console.log('Password validation passed');
     return true;
   };
 
   const handleNextStep = async () => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    if (step === 1) {
-      if (!validatePassword()) return;
-      setStep(2);
-    } else if (step === 2) {
-      await createEncryptedWallet();
-    } else if (step === 3) {
-      await setupBiometric();
+    try {
+      console.log('Next button pressed, current step:', step);
+      console.log('Password length:', userPassword.length);
+      console.log('Passwords match:', userPassword === confirmPassword);
+      
+      // Try haptics (may not work on web)
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        console.log('Haptics triggered');
+      } catch (hapticError) {
+        console.warn('Haptics failed (expected on web):', hapticError);
+      }
+      
+      if (step === 1) {
+        console.log('Validating password...');
+        if (!validatePassword()) {
+          console.log('Password validation failed');
+          return;
+        }
+        console.log('Password validation passed, moving to step 2');
+        setStep(2);
+      } else if (step === 2) {
+        console.log('Creating encrypted wallet...');
+        await createEncryptedWallet();
+      } else if (step === 3) {
+        console.log('Setting up biometric...');
+        await setupBiometric();
+      }
+    } catch (error) {
+      console.error('Next step failed:', error);
+      Alert.alert('Error', 'Failed to proceed to next step. Please try again.');
     }
   };
 
   const createEncryptedWallet = async () => {
     try {
+      console.log('Creating encrypted wallet...');
       setIsCreating(true);
       
-      // Encrypt mnemonic with password
-      const { fakeMnemonic: fake } = await MnemonicEncryptionService.encryptMnemonic(
+      // Skip encryption on web for demo purposes
+      if (typeof window !== 'undefined') {
+        console.log('Running on web, using demo mode');
+        // fakeMnemonic is already set in step 2, don't override it
+        
+        // Simulate wallet creation delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        console.log('Demo wallet created successfully');
+        setStep(3);
+        return;
+      }
+      
+      // Real encryption & transformed mnemonic for mobile
+      console.log('Running on mobile, using real encryption and transform');
+      const encrypted = await MnemonicEncryptionService.encryptMnemonic(
         originalMnemonic,
         userPassword
       );
-      
-      setFakeMnemonic(fake);
-      
-      // Save encrypted mnemonic to secure storage
+      const transformed = await MnemonicTransformService.transformMnemonic(
+        originalMnemonic,
+        userPassword
+      );
+
+      // Save full encrypted mnemonic payload to secure storage
       await SecureStore.setItemAsync(
         STORAGE_KEYS.ENCRYPTED_MNEMONIC,
-        JSON.stringify(fake) // Changed to fake
+        JSON.stringify(encrypted)
       );
+
+      // Hiển thị mnemonic đã biến đổi (36 từ) thay vì mnemonic gốc
+      setFakeMnemonic(transformed);
       
       // Initialize wallet service
       const walletService = CardanoWalletService.getInstance();
@@ -114,7 +176,11 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
     } catch (error) {
       console.error('Failed to create wallet:', error);
       Alert.alert('Wallet Creation Failed', 'Please try again');
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      try {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      } catch (hapticError) {
+        console.warn('Haptics failed:', hapticError);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -122,7 +188,25 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
 
   const setupBiometric = async () => {
     try {
-      // Check biometric support
+      console.log('Setting up biometric...');
+      
+      // Skip biometric on web for demo purposes
+      if (typeof window !== 'undefined') {
+        console.log('Running on web, skipping biometric setup');
+        // Simulate biometric setup delay
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        console.log('Demo biometric setup completed');
+        // Navigate to wallet home
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'WalletHome' }],
+        });
+        return;
+      }
+      
+      // Real biometric setup for mobile
+      console.log('Running on mobile, setting up real biometric');
       const biometricService = BiometricService.getInstance();
       const biometricSupport = await biometricService.checkBiometricSupport();
       
@@ -131,7 +215,11 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
         const success = await biometricService.setupBiometric();
         
         if (success) {
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          try {
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          } catch (hapticError) {
+            console.warn('Haptics failed:', hapticError);
+          }
         }
       }
       
@@ -218,41 +306,44 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
     </Animated.View>
   );
 
-  const renderStep2 = () => (
-    <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
-      <Text style={styles.stepTitle}>Your Encrypted Mnemonic</Text>
+  const renderStep2 = () => {
+    console.log('Rendering step 2, fakeMnemonic:', fakeMnemonic);
+    console.log('fakeMnemonic length:', fakeMnemonic ? fakeMnemonic.length : 'undefined');
+    console.log('fakeMnemonic split:', fakeMnemonic ? fakeMnemonic.split(' ') : 'undefined');
+    
+    return (
+      <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
+      <Text style={styles.stepTitle}>Your Recovery Phrase</Text>
       <Text style={styles.stepDescription}>
-        This is your encrypted backup phrase. Save it securely. You'll need your personal password to use it.
+        This is your wallet's recovery phrase. Write it down and store it securely. Anyone with this phrase can access your funds.
       </Text>
 
-      <View style={styles.mnemonicContainer}>
-        <View style={styles.mnemonicGrid}>
-          {fakeMnemonic.split(' ').map((word, index) => (
-            <View key={index} style={styles.mnemonicWord}>
-              <Text style={styles.mnemonicIndex}>{index + 1}</Text>
-              <Text style={styles.mnemonicText}>{word}</Text>
-            </View>
-          ))}
+        <View style={styles.mnemonicContainer}>
+          <View style={styles.mnemonicGrid}>
+            {originalMnemonic && originalMnemonic.split(' ').map((word, index) => (
+              <View key={index} style={styles.mnemonicWord}>
+                <Text style={styles.mnemonicIndex}>{index + 1}</Text>
+                <Text style={styles.mnemonicText}>{word}</Text>
+              </View>
+            ))}
+          </View>
         </View>
-      </View>
 
-      <View style={styles.warningContainer}>
-        <Text style={styles.warningTitle}>⚠️ Important Security Notice</Text>
-        <Text style={styles.warningText}>
-          This mnemonic phrase is encrypted and ONLY works with your personal password in this Valkyrie wallet.
-        </Text>
-        <Text style={styles.warningText}>
-          • Screenshots are unsafe - write it down physically
-        </Text>
-        <Text style={styles.warningText}>
-          • Cannot be used in other wallets
-        </Text>
-        <Text style={styles.warningText}>
-          • Requires your personal password to restore
-        </Text>
-      </View>
-    </Animated.View>
-  );
+        <View style={styles.warningContainer}>
+          <Text style={styles.warningTitle}>⚠️ Important Security Notice</Text>
+          <Text style={styles.warningText}>
+            • Never share this phrase with anyone
+          </Text>
+          <Text style={styles.warningText}>
+            • Screenshots are unsafe — write it down and store offline
+          </Text>
+          <Text style={styles.warningText}>
+            • This phrase can restore your wallet and funds
+          </Text>
+        </View>
+      </Animated.View>
+    );
+  };
 
   const renderStep3 = () => (
     <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>

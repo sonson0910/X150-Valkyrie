@@ -14,16 +14,17 @@ import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS, STORAGE_KEYS } from '@constants/index';
-import { MnemonicEncryptionService } from '@services/MnemonicEncryptionService';
-import { CardanoWalletService } from '@services/CardanoWalletService';
-import { BiometricService } from '@services/BiometricService';
+import { CYBERPUNK_COLORS, STORAGE_KEYS } from '../constants/index';
+import { MnemonicEncryptionService } from '../services/MnemonicEncryptionService';
+import { CardanoWalletService } from '../services/CardanoWalletService';
+import { BiometricService } from '../services/BiometricService';
 import { 
   CyberpunkButton, 
   CyberpunkInput, 
   CyberpunkCard, 
   FullScreenLoader 
-} from '@components/index';
+} from '../components/index';
+import MnemonicTransformService from '../services/MnemonicTransformService';
 
 type RestoreWalletScreenNavigationProp = StackNavigationProp<RootStackParamList, 'RestoreWallet'>;
 
@@ -41,35 +42,24 @@ const RestoreWalletScreen: React.FC<Props> = ({ navigation }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [checksum, setChecksum] = useState('');
   const [password, setPassword] = useState('');
+  const [isTransformed, setIsTransformed] = useState(true);
 
   const validateEncryptedMnemonic = () => {
     const words = encryptedMnemonic.trim().split(' ');
-    
-    if (words.length !== 12) {
-      Alert.alert('Invalid Mnemonic', 'Please enter exactly 12 words');
+
+    if (isTransformed) {
+      if (words.length !== 36) {
+        Alert.alert('Invalid Mnemonic', 'Please enter exactly 36 words (transformed)');
+        return false;
+      }
+      return true;
+    }
+
+    if (words.length !== 12 && words.length !== 24) {
+      Alert.alert('Invalid Mnemonic', 'Please enter a 12 or 24-word phrase');
       return false;
     }
-    
-    // Basic validation - check for cyberpunk-style words
-    const cyberpunkWords = [
-      'quantum', 'cyber', 'matrix', 'neural', 'crypto', 'binary',
-      'digital', 'virtual', 'nexus', 'protocol', 'algorithm', 'sequence',
-      'vector', 'cipher', 'encode', 'decode', 'syntax', 'buffer',
-      'kernel', 'module', 'runtime', 'compile', 'execute', 'process'
-    ];
-    
-    const isValidFormat = words.every(word => 
-      cyberpunkWords.includes(word.toLowerCase())
-    );
-    
-    if (!isValidFormat) {
-      Alert.alert(
-        'Invalid Mnemonic',
-        'This does not appear to be a valid Valkyrie encrypted mnemonic phrase.'
-      );
-      return false;
-    }
-    
+
     return true;
   };
 
@@ -89,12 +79,32 @@ const RestoreWalletScreen: React.FC<Props> = ({ navigation }) => {
 
   const attemptRestore = async (encryptedMnemonic: string, password: string): Promise<boolean> => {
     try {
-      // This would integrate with CardanoWalletService
-      console.log('Attempting to restore wallet...');
-      
-      // For now, simulate restoration
+      // Validate password by attempting decryption when payload exists
+      const encryptedJson = await SecureStore.getItemAsync(STORAGE_KEYS.ENCRYPTED_MNEMONIC);
+      if (encryptedJson) {
+        try {
+          const encrypted = JSON.parse(encryptedJson);
+          await MnemonicEncryptionService.decryptMnemonic(encrypted, password);
+        } catch (e) {
+          Alert.alert('Invalid Password', 'The provided password is incorrect');
+          return false;
+        }
+      }
+
+      // If transformed, restore to original
+      let originalMnemonic = encryptedMnemonic;
+      const words = encryptedMnemonic.trim().split(/\s+/);
+      if (isTransformed || words.length === 36) {
+        try {
+          originalMnemonic = await MnemonicTransformService.restoreOriginalMnemonic(encryptedMnemonic, password);
+        } catch (e) {
+          Alert.alert('Restore Failed', 'Failed to restore from transformed mnemonic. Please check your password and phrase.');
+          return false;
+        }
+      }
+
+      // Simulate next steps or initialize wallet service with originalMnemonic
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
       return true;
     } catch (error) {
       console.error('Wallet restoration failed:', error);
@@ -146,9 +156,9 @@ const RestoreWalletScreen: React.FC<Props> = ({ navigation }) => {
 
   const renderStep1 = () => (
     <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Enter Encrypted Mnemonic</Text>
+      <Text style={styles.stepTitle}>Enter Transformed Mnemonic</Text>
       <Text style={styles.stepDescription}>
-        Enter the encrypted mnemonic phrase from your Valkyrie wallet backup.
+        Enter the transformed mnemonic (36 words) from your Valkyrie backup. You will need your personal password to restore.
       </Text>
 
       <CyberpunkInput
@@ -160,24 +170,31 @@ const RestoreWalletScreen: React.FC<Props> = ({ navigation }) => {
       />
 
       <CyberpunkInput
-        label="Encrypted Mnemonic Phrase"
+        label="Mnemonic Phrase"
         value={encryptedMnemonic}
         onChangeText={setEncryptedMnemonic}
-        placeholder="Enter your 12-word encrypted mnemonic"
+        placeholder="Enter your transformed (36 words) or original (24 words) phrase"
         multiline
         numberOfLines={4}
         leftIcon="🔐"
-        hint="This should be the encrypted mnemonic from your Valkyrie backup"
+        hint="Transformed phrases only work with Valkyrie and require your password to restore"
       />
+
+      <View style={styles.toggleRow}>
+        <Text style={styles.toggleLabel}>Transformed</Text>
+        <TouchableOpacity onPress={() => setIsTransformed(!isTransformed)} style={[styles.toggle, isTransformed && styles.toggleOn]}>
+          <View style={[styles.knob, isTransformed && styles.knobOn]} />
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity style={styles.scanButton} onPress={handleScanQR}>
         <Text style={styles.scanButtonText}>📱 Scan QR Code</Text>
       </TouchableOpacity>
 
       <CyberpunkCard variant="outline" style={styles.infoCard}>
-        <Text style={styles.infoTitle}>ℹ️ About Encrypted Mnemonic</Text>
+        <Text style={styles.infoTitle}>ℹ️ About Transformed Mnemonic</Text>
         <Text style={styles.infoText}>
-          This mnemonic was encrypted with your personal password. You'll need both the mnemonic and your password to restore your wallet.
+          Your transformed mnemonic is derived from your original phrase and personal password. It’s only reversible with your password in Valkyrie.
         </Text>
       </CyberpunkCard>
     </View>
@@ -419,6 +436,36 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: CYBERPUNK_COLORS.textSecondary,
     lineHeight: 20,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  toggleLabel: {
+    color: CYBERPUNK_COLORS.text,
+    marginRight: 8,
+  },
+  toggle: {
+    width: 40,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#333',
+    justifyContent: 'center',
+  },
+  toggleOn: {
+    backgroundColor: CYBERPUNK_COLORS.primary,
+  },
+  knob: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#111',
+    marginLeft: 3,
+  },
+  knobOn: {
+    marginLeft: 19,
+    backgroundColor: CYBERPUNK_COLORS.background,
   },
 });
 

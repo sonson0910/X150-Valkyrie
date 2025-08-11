@@ -14,14 +14,22 @@ import {
     TransactionInput,
     TransactionWitnessSet,
     TransactionHash,
-    Vkeywitness
+    Vkeywitness,
+    Vkey,
+    Vkeywitnesses,
+    Transaction as CslTransaction,
+    MultiAsset,
+    Assets,
+    AssetName,
+    ScriptHash,
+    hash_transaction,
+    min_ada_required
 } from '@emurgo/cardano-serialization-lib-browser';
-import { CARDANO_NETWORKS } from '@constants/index';
+import { CARDANO_NETWORKS, WALLET_CONSTANTS } from '../constants/index';
 import { CardanoAPIService } from './CardanoAPIService';
 import { NetworkService } from './NetworkService';
 import { ErrorHandler, ErrorType, ErrorSeverity } from './ErrorHandler';
 import { WalletAccount, Transaction, TransactionStatus } from '../types/wallet';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Service chính để quản lý ví Cardano
@@ -35,19 +43,19 @@ export class CardanoWalletService {
     private networkService: NetworkService;
     private errorHandler: ErrorHandler;
 
+    public static getInstance(networkType: 'mainnet' | 'testnet' = 'testnet'): CardanoWalletService {
+        if (!CardanoWalletService.instance) {
+            CardanoWalletService.instance = new CardanoWalletService(networkType);
+        }
+        return CardanoWalletService.instance;
+    }
+
     private constructor(networkType: 'mainnet' | 'testnet' = 'testnet') {
         this.network = networkType === 'mainnet' ? CARDANO_NETWORKS.MAINNET : CARDANO_NETWORKS.TESTNET;
         this.apiService = CardanoAPIService.getInstance();
         this.apiService.setNetwork(networkType);
         this.networkService = NetworkService.getInstance();
         this.errorHandler = ErrorHandler.getInstance();
-    }
-
-    public static getInstance(networkType: 'mainnet' | 'testnet' = 'testnet'): CardanoWalletService {
-        if (!CardanoWalletService.instance) {
-            CardanoWalletService.instance = new CardanoWalletService(networkType);
-        }
-        return CardanoWalletService.instance;
     }
 
     /**
@@ -181,7 +189,8 @@ export class CardanoWalletService {
         fromAddress: string,
         toAddress: string,
         amount: string,
-        metadata?: any
+        metadata?: any,
+        assets?: Array<{ unit: string; quantity: string }>
     ): Promise<Transaction> {
         try {
             // Validate addresses
@@ -215,13 +224,71 @@ export class CardanoWalletService {
                 throw new Error(`Insufficient balance. Available: ${totalBalance} lovelace`);
             }
 
+            // Choose UTXOs based on policy or explicit selection
+            const { selectedUtxos, policy } = this.selectUtxosForSpend(
+                utxos,
+                amountNum,
+                (metadata && metadata.utxoPolicy) || 'optimize-fee',
+                metadata && metadata.selectedUtxos
+            );
+
+            // Precise min-ADA calculation for multi-asset outputs using CSL
+            let minAdaRequired: bigint | undefined = undefined;
+            if (assets && assets.length > 0) {
+                try {
+                    const params = await this.apiService.getProtocolParameters();
+                    const coinsPerUtxoByte = params.coins_per_utxo_size || params.coins_per_utxo_word || '4310';
+                    const outputValueForCheck = Value.new(BigNum.from_str(amount));
+                    const ma = MultiAsset.new();
+                    const byPolicy: Record<string, Array<{ nameHex: string; qty: string }>> = {};
+                    for (const a of assets) {
+                        const policyId = a.unit.slice(0, 56);
+                        const nameHex = a.unit.slice(56);
+                        if (!byPolicy[policyId]) byPolicy[policyId] = [];
+                        byPolicy[policyId].push({ nameHex, qty: a.quantity });
+                    }
+                    for (const [policyId, assetList] of Object.entries(byPolicy)) {
+                        const policyHash = ScriptHash.from_bytes(Buffer.from(policyId, 'hex'));
+                        const assetsColl = Assets.new();
+                        for (const asset of assetList) {
+                            const assetName = AssetName.new(Buffer.from(asset.nameHex, 'hex'));
+                            assetsColl.insert(assetName, BigNum.from_str(asset.qty));
+                        }
+                        ma.insert(policyHash, assetsColl);
+                    }
+                    outputValueForCheck.set_multiasset(ma);
+                    const minAda = min_ada_required(outputValueForCheck, false, BigNum.from_str(String(coinsPerUtxoByte)));
+                    minAdaRequired = BigInt(minAda.to_str());
+                } catch (e) {
+                    console.warn('Failed to compute precise min-ADA, will proceed with amount as-is');
+                }
+            }
+
+            const inputCount = selectedUtxos.length;
             // Calculate estimated fee (simplified)
-            const estimatedFee = this.calculateEstimatedFee(utxos.length, 1);
+            const estimatedFee = this.calculateEstimatedFee(inputCount, 1);
 
             // Check if balance covers amount + fee
-            if (totalBalance < (amountNum + estimatedFee)) {
+            const selectedTotal = selectedUtxos.reduce((sum, u) => {
+                const adaAmount = u.amount.find((a: any) => a.unit === 'lovelace');
+                return sum + BigInt(adaAmount ? adaAmount.quantity : '0');
+            }, BigInt(0));
+
+            if (selectedTotal < (amountNum + estimatedFee)) {
                 throw new Error(`Insufficient balance for amount + fee. Required: ${amountNum + estimatedFee} lovelace`);
             }
+
+            // Estimate change
+            const effectiveOutputAda = minAdaRequired && amountNum < minAdaRequired ? minAdaRequired : amountNum;
+            const change = selectedTotal - (effectiveOutputAda + estimatedFee);
+
+            // TTL (invalid_hereafter) estimation
+            let ttl: number | undefined = undefined;
+            try {
+                const latest = await this.apiService.getLatestBlock();
+                const currentSlot = (latest.slot as number) || 0;
+                ttl = currentSlot + 1800; // ~30 minutes buffer
+            } catch { }
 
             const transaction: Transaction = {
                 id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
@@ -231,8 +298,17 @@ export class CardanoWalletService {
                 to: toAddress,
                 status: TransactionStatus.PENDING,
                 timestamp: new Date(),
-                metadata,
-                isOffline: false
+                metadata: {
+                    ...(metadata || {}),
+                    ttl,
+                    utxoPolicy: policy,
+                    selectedUtxos: selectedUtxos.map(u => ({ tx_hash: u.tx_hash, tx_index: u.tx_index })),
+                    change: change > 0 ? change.toString() : '0',
+                    minAdaRequired: minAdaRequired ? minAdaRequired.toString() : undefined
+                },
+                isOffline: false,
+                assets,
+                inputs: selectedUtxos
             };
 
             return transaction;
@@ -252,6 +328,49 @@ export class CardanoWalletService {
         const outputFee = BigInt(4310); // Fee per output
 
         return baseFee + (BigInt(inputCount) * inputFee) + (BigInt(outputCount) * outputFee);
+    }
+
+    /**
+     * Select UTXOs based on policy or explicit selection
+     */
+    private selectUtxosForSpend(
+        utxos: Array<{ tx_hash: string; tx_index: number; amount: Array<{ unit: string; quantity: string }> }>,
+        targetAmount: bigint,
+        policy: 'largest-first' | 'smallest-first' | 'random' | 'optimize-fee' | 'privacy' = 'optimize-fee',
+        explicit?: Array<{ tx_hash: string; tx_index: number }>
+    ): { selectedUtxos: typeof utxos; policy: typeof policy } {
+        if (explicit && explicit.length > 0) {
+            const map = new Map(explicit.map(e => [`${e.tx_hash}:${e.tx_index}`, true] as const));
+            const chosen = utxos.filter(u => map.has(`${u.tx_hash}:${u.tx_index}`));
+            return { selectedUtxos: chosen, policy: 'optimize-fee' };
+        }
+
+        const sorted = [...utxos].sort((a, b) => {
+            const aAda = BigInt(a.amount.find(x => x.unit === 'lovelace')?.quantity || '0');
+            const bAda = BigInt(b.amount.find(x => x.unit === 'lovelace')?.quantity || '0');
+            switch (policy) {
+                case 'largest-first':
+                case 'optimize-fee':
+                    return Number(bAda - aAda);
+                case 'smallest-first':
+                case 'privacy':
+                    return Number(aAda - bAda);
+                case 'random':
+                    return Math.random() < 0.5 ? -1 : 1;
+                default:
+                    return Number(bAda - aAda);
+            }
+        });
+
+        const selected: typeof utxos = [];
+        let sum = BigInt(0);
+        for (const u of sorted) {
+            selected.push(u);
+            const qty = BigInt(u.amount.find(x => x.unit === 'lovelace')?.quantity || '0');
+            sum += qty;
+            if (sum >= targetAmount) break;
+        }
+        return { selectedUtxos: selected, policy };
     }
 
     /**
@@ -279,66 +398,128 @@ export class CardanoWalletService {
 
             // Implement actual transaction signing với cardano-serialization-lib
             try {
-                // 1. Build transaction body
-                const txBuilder = TransactionBuilder.new(
-                    TransactionBuilderConfigBuilder.new()
-                        .fee_algo(LinearFee.new(BigNum.from_str('155381'), BigNum.from_str('4310')))
-                        .pool_deposit(BigNum.from_str('500000000'))
-                        .key_deposit(BigNum.from_str('2000000'))
-                        .coins_per_utxo_byte(BigNum.from_str('4310'))
-                        .max_value_size(5000)
-                        .max_tx_size(16384)
-                        .build()
+                // 1) Lấy protocol params để cấu hình builder chính xác
+                const params = await this.apiService.getProtocolParameters();
+                const feeAlgo = LinearFee.new(
+                    BigNum.from_str(String(params.min_fee_a)),
+                    BigNum.from_str(String(params.min_fee_b))
                 );
 
-                // 2. Add inputs (UTXOs)
+                const coinsPerUtxoByte = params.coins_per_utxo_size || params.coins_per_utxo_word || '4310';
+                const maxValSize = params.max_val_size || '5000';
+                const config = TransactionBuilderConfigBuilder.new()
+                    .fee_algo(feeAlgo)
+                    .pool_deposit(BigNum.from_str(params.pool_deposit))
+                    .key_deposit(BigNum.from_str(params.key_deposit))
+                    .coins_per_utxo_byte(BigNum.from_str(String(coinsPerUtxoByte)))
+                    .max_value_size(Number(maxValSize))
+                    .max_tx_size(params.max_tx_size || 16384)
+                    .build();
+
+                const txBuilder = TransactionBuilder.new(config);
+
+                // 2) Add inputs (UTXOs) tối thiểu đủ cover amount + fee ước lượng
                 const utxos = await this.getUTXOs(transaction.from);
-                for (const utxo of utxos) {
-                    const txHash = TransactionHash.from_bytes(Buffer.from(utxo.tx_hash, 'hex'));
-                    const txIndex = utxo.tx_index;
-                    const input = TransactionInput.new(txHash, txIndex);
-                    txBuilder.add_input(Address.from_bech32(transaction.from), input, Value.new(BigNum.from_str(utxo.amount[0].quantity)));
+                // Respect selected UTXOs if provided in metadata
+                const explicit = transaction.metadata?.selectedUtxos as Array<{ tx_hash: string; tx_index: number }> | undefined;
+                let accumulated = BigInt(0);
+                const target = BigInt(transaction.amount) + this.calculateEstimatedFee(utxos.length, 1);
+                const pickList = explicit && explicit.length > 0
+                    ? utxos.filter(u => explicit.some(e => e.tx_hash === u.tx_hash && e.tx_index === u.tx_index))
+                    : utxos;
+                for (const utxo of pickList) {
+                    const val = this.buildValueFromAmounts(utxo.amount);
+                    const ada = utxo.amount.find((a: any) => a.unit === 'lovelace');
+                    const qty = BigInt(ada ? ada.quantity : '0');
+                    const input = TransactionInput.new(
+                        TransactionHash.from_bytes(Buffer.from(utxo.tx_hash, 'hex')),
+                        utxo.tx_index
+                    );
+                    txBuilder.add_input(
+                        Address.from_bech32(transaction.from),
+                        input,
+                        val
+                    );
+                    accumulated += qty;
+                    if (accumulated >= target) break;
                 }
 
-                // 3. Add outputs
-                const outputAmount = Value.new(BigNum.from_str(transaction.amount));
-                const output = TransactionOutput.new(
-                    Address.from_bech32(transaction.to),
-                    outputAmount
+                // 3) Output chính (ADA + optional multi-assets)
+                const outputValue = Value.new(BigNum.from_str(transaction.amount));
+                if (transaction.assets && transaction.assets.length > 0) {
+                    // Build multi-asset for requested output
+                    const ma = MultiAsset.new();
+                    const byPolicy: Record<string, Array<{ nameHex: string; qty: string }>> = {};
+                    for (const a of transaction.assets) {
+                        const policyId = a.unit.slice(0, 56);
+                        const nameHex = a.unit.slice(56);
+                        if (!byPolicy[policyId]) byPolicy[policyId] = [];
+                        byPolicy[policyId].push({ nameHex, qty: a.quantity });
+                    }
+                    for (const [policyId, assets] of Object.entries(byPolicy)) {
+                        const policyHash = ScriptHash.from_bytes(Buffer.from(policyId, 'hex'));
+                        const assetsColl = Assets.new();
+                        for (const asset of assets) {
+                            const assetName = AssetName.new(Buffer.from(asset.nameHex, 'hex'));
+                            assetsColl.insert(assetName, BigNum.from_str(asset.qty));
+                        }
+                        ma.insert(policyHash, assetsColl);
+                    }
+                    outputValue.set_multiasset(ma);
+                }
+                txBuilder.add_output(
+                    TransactionOutput.new(
+                        Address.from_bech32(transaction.to),
+                        outputValue
+                    )
                 );
-                txBuilder.add_output(output);
 
-                // 4. Build transaction
+                // 4) TTL: sử dụng latest block để ước lượng invalid_hereafter
+                try {
+                    const latest = await this.apiService.getLatestBlock();
+                    const currentSlot = (latest.slot as number) || 0;
+                    const ttl = currentSlot + 1800; // ~30 phút
+                    // Set TTL nếu API builder hỗ trợ
+                    // @ts-ignore
+                    if (typeof (txBuilder as any).set_ttl === 'function') {
+                        // @ts-ignore
+                        (txBuilder as any).set_ttl(BigNum.from_str(String(ttl)));
+                    }
+                    // Ghi TTL vào metadata nếu chưa có
+                    if (!transaction.metadata) transaction.metadata = {} as any;
+                    (transaction.metadata as any).ttl = ttl;
+                } catch (e) {
+                    // Ignore TTL set failure in simplified path
+                }
+
+                // 5) Bảo đảm min-ADA cho output chứa multi-asset (placeholder: rely on builder for now)
+                // Trong triển khai đầy đủ, cần tính min-ADA theo CIP-002, tạm thời tiếp tục.
+
+                // 6) Tự động thêm change nếu cần
+                txBuilder.add_change_if_needed(Address.from_bech32(transaction.from));
+
+                // 7) Ước lượng phí tối thiểu
+                const minFee = (txBuilder as any).min_fee ? (txBuilder as any).min_fee() : BigNum.from_str(transaction.fee || '0');
+                if (minFee) transaction.fee = (minFee as BigNum).to_str();
+
+                // 8) Build body để tính hash và ký
                 const txBody = txBuilder.build();
-                const tx = TransactionBuilder.new(
-                    TransactionBuilderConfigBuilder.new()
-                        .fee_algo(LinearFee.new(BigNum.from_str('155381'), BigNum.from_str('4310')))
-                        .pool_deposit(BigNum.from_str('500000000'))
-                        .key_deposit(BigNum.from_str('2000000'))
-                        .coins_per_utxo_byte(BigNum.from_str('4310'))
-                        .max_value_size(5000)
-                        .max_tx_size(16384)
-                        .build()
-                );
+                const txHash = hash_transaction(txBody);
 
-                // 5. Sign với private key
-                const txHash = TransactionHash.from_bytes(txBody.to_bytes());
+                // 9) Ký với khóa chi tiêu
+                const rawSpendingKey = spendingKey.to_raw_key();
+                const signature = rawSpendingKey.sign(txHash.to_bytes());
+                const vkey = Vkey.new(spendingKey.to_public().to_raw_key());
+                const vkeyWitness = Vkeywitness.new(vkey, signature);
+                const witnesses = TransactionWitnessSet.new();
+                const vkeys = Vkeywitnesses.new();
+                vkeys.add(vkeyWitness);
+                witnesses.set_vkeys(vkeys);
 
-                // Tạo signature
-                const signature = spendingKey.to_raw_key().sign(txHash.to_bytes());
-
-                // Build final transaction
-                const finalTx = txBuilder.build();
-
-                // Tạo transaction hoàn chỉnh với signature
-                const signedTransaction = {
-                    body: finalTx,
-                    signature: signature,
-                    publicKey: spendingKey.to_public().to_raw_key().hash()
-                };
-
-                // Serialize transaction thành CBOR hex
-                return finalTx.to_hex();
+                // 10) Serialize tx theo định dạng hợp lệ (CBOR)
+                const signedTx = CslTransaction.new(txBody, witnesses);
+                const cborHex = Buffer.from(signedTx.to_bytes()).toString('hex');
+                return cborHex;
 
             } catch (signingError) {
                 console.error('Transaction signing failed:', signingError);
@@ -348,6 +529,40 @@ export class CardanoWalletService {
         } catch (error) {
             throw new Error(`Failed to sign transaction: ${error}`);
         }
+    }
+
+    /**
+     * Build Value from Blockfrost amount array (ADA + multi-assets)
+     */
+    private buildValueFromAmounts(amount: Array<{ unit: string; quantity: string }>): Value {
+        const adaEntry = amount.find(a => a.unit === 'lovelace');
+        const lovelace = BigNum.from_str(adaEntry ? adaEntry.quantity : '0');
+        const value = Value.new(lovelace);
+
+        const assetEntries = amount.filter(a => a.unit !== 'lovelace');
+        if (assetEntries.length === 0) return value;
+
+        const multiAsset = MultiAsset.new();
+        const byPolicy: Record<string, Array<{ nameHex: string; qty: string }>> = {};
+        for (const a of assetEntries) {
+            const policyId = a.unit.slice(0, 56);
+            const nameHex = a.unit.slice(56);
+            if (!byPolicy[policyId]) byPolicy[policyId] = [];
+            byPolicy[policyId].push({ nameHex, qty: a.quantity });
+        }
+
+        for (const [policyId, assets] of Object.entries(byPolicy)) {
+            const policyHash = ScriptHash.from_bytes(Buffer.from(policyId, 'hex'));
+            const assetsColl = Assets.new();
+            for (const asset of assets) {
+                const assetName = AssetName.new(Buffer.from(asset.nameHex, 'hex'));
+                assetsColl.insert(assetName, BigNum.from_str(asset.qty));
+            }
+            multiAsset.insert(policyHash, assetsColl);
+        }
+
+        value.set_multiasset(multiAsset);
+        return value;
     }
 
     /**

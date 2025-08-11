@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS } from '@constants/index';
+import { CYBERPUNK_COLORS } from '../constants/index';
 import { 
   PortfolioAnalyticsService, 
   PortfolioSummary, 
@@ -24,8 +24,8 @@ import {
   StakingAnalytics,
   NFTCollectionAnalytics,
   RiskMetrics
-} from '@services/PortfolioAnalyticsService';
-import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '@components/index';
+} from '../services/PortfolioAnalyticsService';
+import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '../components/index';
 
 type PortfolioAnalyticsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'PortfolioAnalytics'>;
 

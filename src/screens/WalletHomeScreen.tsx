@@ -13,14 +13,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS } from '@constants/index';
+import { CYBERPUNK_COLORS } from '../constants/index';
 import { 
   BalanceSkeleton, 
   QuickActionsSkeleton, 
   TransactionSkeleton 
-} from '@components/index';
-import { WalletDataService, TransactionData } from '@services/WalletDataService';
-import { CardanoAPIService } from '@services/CardanoAPIService';
+} from '../components/index';
+import { WalletDataService, TransactionData } from '../services/WalletDataService';
+import { CardanoAPIService } from '../services/CardanoAPIService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type WalletHomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'WalletHome'>;

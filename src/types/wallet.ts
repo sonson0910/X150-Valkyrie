@@ -17,10 +17,23 @@ export interface Transaction {
     to: string;
     status: TransactionStatus;
     timestamp: Date;
-    metadata?: any;
+    metadata?: {
+        ttl?: number;
+        utxoPolicy?: 'largest-first' | 'smallest-first' | 'random' | 'optimize-fee' | 'privacy';
+        selectedUtxos?: Array<{ tx_hash: string; tx_index: number }>;
+        change?: string;
+        minAdaRequired?: string;
+    } & Record<string, any>;
     isOffline?: boolean;
     signedTx?: string; // Signed transaction data for offline transactions
     errorDetails?: string; // Error details if transaction failed
+    assets?: Array<{ unit: string; quantity: string }>; // Optional multi-asset for outputs
+    inputs?: Array<{
+        tx_hash: string;
+        tx_index: number;
+        amount: Array<{ unit: string; quantity: string }>;
+        address?: string;
+    }>;
 }
 
 export enum TransactionStatus {

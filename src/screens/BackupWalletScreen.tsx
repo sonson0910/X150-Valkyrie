@@ -15,14 +15,14 @@ import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS, STORAGE_KEYS } from '@constants/index';
-import { BiometricService } from '@services/BiometricService';
-import { MnemonicEncryptionService } from '@services/MnemonicEncryptionService';
+import { CYBERPUNK_COLORS, STORAGE_KEYS } from '../constants/index';
+import { BiometricService } from '../services/BiometricService';
+import { MnemonicEncryptionService } from '../services/MnemonicEncryptionService';
 import { 
   CyberpunkButton, 
   CyberpunkCard, 
   FullScreenLoader 
-} from '@components/index';
+} from '../components/index';
 
 type BackupWalletScreenNavigationProp = StackNavigationProp<RootStackParamList, 'BackupWallet'>;
 

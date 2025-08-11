@@ -14,9 +14,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
-import { CYBERPUNK_COLORS } from '@constants/index';
-import { MultiSignatureService, MultiSigWallet, MultiSigTransaction } from '@services/MultiSignatureService';
-import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '@components/index';
+import { CYBERPUNK_COLORS } from '../constants/index';
+import { MultiSignatureService, MultiSigWallet, MultiSigTransaction } from '../services/MultiSignatureService';
+import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '../components/index';
 
 type MultiSignatureScreenNavigationProp = StackNavigationProp<RootStackParamList, 'MultiSignature'>;
 

@@ -573,15 +573,24 @@ export class CertificatePinningService {
      * Bật/tắt certificate pinning
      */
     setEnabled(enabled: boolean): void {
-        // Store in configuration service instead of direct assignment
-        this.configService.setSetting('certificatePinning', enabled);
+        // Update nested security setting for certificate pinning
+        const securityConfig = this.configService.getSecurityConfiguration();
+        const updated = {
+            ...securityConfig.certificatePinning,
+            enabled,
+        };
+        this.configService.setSecuritySetting('certificatePinning', updated);
     }
 
     /**
      * Kiểm tra xem certificate pinning có được bật không
      */
     isEnabled(): boolean {
-        return this.configService.getSetting('certificatePinning') || false;
+        try {
+            return !!this.configService.getSecurityConfiguration().certificatePinning.enabled;
+        } catch (e) {
+            return false;
+        }
     }
 
     /**

@@ -584,7 +584,7 @@ export class DeFiStakingService {
 
     // Private methods for transaction building and signing
     private async buildDelegationTransaction(address: string, poolId: string, amount: string): Promise<any> {
-        // This would integrate with cardano-serialization-lib
+        // TODO: Dùng cardano-serialization-lib để tạo certificate delegation thật sự
         return { type: 'delegation', address, poolId, amount };
     }
 
@@ -605,6 +605,7 @@ export class DeFiStakingService {
     }
 
     private async signDelegationTransaction(transaction: any): Promise<string> {
+        // TODO: Kết nối CardanoWalletService.signTransaction cho real signing khi có tx builder đầy đủ
         return `signed_delegation_${Date.now()}`;
     }
 

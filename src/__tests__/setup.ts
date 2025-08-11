@@ -5,14 +5,18 @@ jest.mock('expo-status-bar');
 jest.mock('expo-haptics');
 jest.mock('expo-linear-gradient');
 jest.mock('expo-crypto');
-jest.mock('expo-secure-store');
+jest.mock('expo-secure-store', () => ({
+    getItemAsync: jest.fn(async () => null),
+    setItemAsync: jest.fn(async () => { }),
+    deleteItemAsync: jest.fn(async () => { }),
+}));
 jest.mock('expo-local-authentication');
 jest.mock('expo-av');
 
 // Mock react-native modules
 jest.mock('react-native/Libraries/Animated/NativeAnimatedHelper');
 jest.mock('react-native/Libraries/EventEmitter/NativeEventEmitter');
-jest.mock('react-native/Libraries/Networking/Networking');
+// In RN 0.72+, internal Networking module path may change; skip explicit mock
 
 // Mock navigation
 jest.mock('@react-navigation/native', () => ({
@@ -52,6 +56,9 @@ jest.mock('react-native-keychain', () => ({
 jest.mock('react-native-biometrics', () => ({
     isSensorAvailable: jest.fn(() => Promise.resolve({ available: true, biometryType: 'TouchID' })),
     simplePrompt: jest.fn(() => Promise.resolve({ success: true })),
+    biometricKeysExist: jest.fn(() => Promise.resolve({ keysExist: true })),
+    createKeys: jest.fn(() => Promise.resolve({ publicKey: 'PUBKEY' })),
+    createSignature: jest.fn(() => Promise.resolve({ success: true, signature: 'SIG' })),
 }));
 
 // Mock crypto-js
@@ -88,36 +95,8 @@ jest.mock('bip39', () => ({
     mnemonicToSeedSync: jest.fn(() => Buffer.from('test_seed')),
 }));
 
-// Mock cardano-serialization-lib
-jest.mock('cardano-serialization-lib', () => ({
-    Address: {
-        from_bech32: jest.fn(() => ({ to_bech32: () => 'test_address' })),
-    },
-    BaseAddress: {
-        new: jest.fn(() => ({
-            to_address: () => ({ to_bech32: () => 'test_address' }),
-        })),
-    },
-    StakeCredential: {
-        from_keyhash: jest.fn(() => 'stake_credential'),
-    },
-    Ed25519KeyHash: {
-        from_bytes: jest.fn(() => ({ to_bech32: () => 'stake_address' })),
-    },
-    Bip32PrivateKey: {
-        from_bip39_entropy: jest.fn(() => ({
-            derive: jest.fn(() => ({
-                derive: jest.fn(() => ({
-                    to_public: () => ({
-                        to_raw_key: () => ({
-                            hash: () => ({ to_bech32: () => 'stake_address' }),
-                        }),
-                    }),
-                })),
-            })),
-        })),
-    },
-}));
+// Mock cardano-serialization-lib (virtual stub) to avoid requiring native/browser binaries in Jest
+jest.mock('@emurgo/cardano-serialization-lib-browser', () => ({}), { virtual: true });
 
 // Global test utilities
 global.console = {
