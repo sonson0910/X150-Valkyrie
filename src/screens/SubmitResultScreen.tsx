@@ -4,6 +4,11 @@ import { StackScreenProps } from '@react-navigation/stack';
 import { RootStackParamList } from '../types/navigation';
 import { CYBERPUNK_COLORS } from '../constants/index';
 import * as Clipboard from 'expo-clipboard';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppText } from '../components/ui/AppText';
+import { AppButton } from '../components/ui/AppButton';
+import { tokens } from '../theme/tokens';
 
 type Props = StackScreenProps<RootStackParamList, 'SubmitResult'>;
 
@@ -29,22 +34,20 @@ const SubmitResultScreen: React.FC<Props> = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Transaction Submitted</Text>
-      <Text style={styles.label}>Hash</Text>
-      <Text style={styles.hash}>{txHash}</Text>
+      <Container center padded full>
+        <Card style={{ width: '100%', maxWidth: 600 }}>
+          <AppText variant="h2" style={{ textAlign: 'center', marginBottom: 12 }}>Transaction Submitted</AppText>
+          <AppText variant="body2" color={tokens.palette.textSecondary} style={{ textAlign: 'center' }}>Hash</AppText>
+          <AppText variant="caption" style={styles.hash}>{txHash}</AppText>
 
-      <View style={styles.actions}>
-        <TouchableOpacity style={styles.button} onPress={copyHash}>
-          <Text style={styles.buttonText}>Copy Hash</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.button, { backgroundColor: CYBERPUNK_COLORS.accent }]} onPress={openExplorer}>
-          <Text style={styles.buttonText}>Open Explorer</Text>
-        </TouchableOpacity>
-      </View>
+          <View style={styles.actions}>
+            <AppButton title="Copy Hash" onPress={copyHash} style={{ flex: 1 }} />
+            <AppButton title="Open Explorer" variant="secondary" onPress={openExplorer} style={{ flex: 1, marginLeft: 12 }} />
+          </View>
 
-      <TouchableOpacity style={[styles.button, { marginTop: 20 }]} onPress={() => navigation.navigate('TransactionHistory')}>
-        <Text style={styles.buttonText}>View History</Text>
-      </TouchableOpacity>
+          <AppButton title="View History" onPress={() => navigation.navigate('TransactionHistory')} style={{ marginTop: 20 }} />
+        </Card>
+      </Container>
     </View>
   );
 };
@@ -76,17 +79,6 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     marginTop: 20,
-    gap: 12,
-  },
-  button: {
-    backgroundColor: CYBERPUNK_COLORS.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: CYBERPUNK_COLORS.background,
-    fontWeight: '600',
   },
 });
 

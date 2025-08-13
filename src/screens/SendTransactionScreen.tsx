@@ -12,6 +12,11 @@ import {
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppButton } from '../components/ui/AppButton';
+import { AppText } from '../components/ui/AppText';
+import { tokens } from '../theme/tokens';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
@@ -24,6 +29,7 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
 import { CardanoWalletService } from '../services/CardanoWalletService';
+import { WalletStateService } from '../services/WalletStateService';
 import TransactionPreviewModal from './TransactionPreviewModal';
 
 type SendTransactionScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SendTransaction'>;
@@ -86,8 +92,8 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
       setResolvedAddressInfo(resolved);
 
       // Validate amount
-      const amountNum = parseFloat(amount);
-      if (isNaN(amountNum) || amountNum <= 0) {
+      const amountNum = Number(amount);
+      if (!isFinite(amountNum) || amountNum <= 0) {
         return { success: false, error: 'Invalid amount' };
       }
 
@@ -121,20 +127,20 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
 
   // Get current wallet address
   const getCurrentWalletAddress = async (): Promise<string> => {
-    // Get from wallet state management
+    // Ưu tiên WalletStateService
     try {
-      // This should integrate with WalletStateService or similar
+      const state = WalletStateService.getInstance();
+      if (!state.getCurrentAddress()) await state.initialize();
+      const addr = state.getCurrentAddress();
+      if (addr) return addr;
+    } catch {}
+    // Fallback: SecureStore (cũ)
+    try {
       const storedAddress = await SecureStore.getItemAsync('current_wallet_address');
-      if (storedAddress) {
-        return storedAddress;
-      }
-      
-      // Fallback to placeholder address
-      return 'addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer';
-    } catch (error) {
-      console.warn('Failed to get wallet address, using placeholder:', error);
-      return 'addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer';
-    }
+      if (storedAddress) return storedAddress;
+    } catch {}
+    // Fallback cuối
+    return 'addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer';
   };
 
   // Deprecated local builder kept as placeholder
@@ -292,11 +298,11 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
       // Check if amount is within quick pay limit
-      const amountLovelace = (parseFloat(amount) * 1000000).toString();
+      const amountLovelace = CardanoAPIService.adaToLovelace(amount);
       const biometricService = BiometricService.getInstance();
       const quickPayResult = await biometricService.authenticateQuickPay(
         amountLovelace,
-        '10000000' // 10 ADA limit
+        '10000000' // 10 ADA limit in lovelace
       );
 
       if (!quickPayResult.success && quickPayResult.requireFullAuth) {
@@ -336,31 +342,27 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
 
   return (
     <>
-      <LinearGradient
-        colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-        style={styles.container}
-      >
+      <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.form}>
+        <Container padded>
+        <Card>
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Recipient Address</Text>
+            <AppText variant="body" style={styles.inputLabel}>Recipient Address</AppText>
             <TextInput
               style={styles.input}
               value={recipientAddress}
               onChangeText={setRecipientAddress}
               placeholder="addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer..."
-              placeholderTextColor={CYBERPUNK_COLORS.textSecondary}
+              placeholderTextColor={tokens.palette.textSecondary}
               multiline
             />
             {resolvedAddressInfo && (
-              <Text style={{ color: CYBERPUNK_COLORS.textSecondary, marginTop: 6 }}>
-                Resolved: {resolvedAddressInfo.address} ({resolvedAddressInfo.source})
-              </Text>
+              <AppText variant="caption" color={tokens.palette.textSecondary} style={{ marginTop: tokens.spacing.xs }}>Resolved: {resolvedAddressInfo.address} ({resolvedAddressInfo.source})</AppText>
             )}
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Coin Control Policy</Text>
+            <AppText style={styles.inputLabel}>Coin Control Policy</AppText>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               {(['optimize-fee','largest-first','smallest-first','random','privacy'] as const).map(p => (
                 <TouchableOpacity key={p} style={[styles.policyChip, utxoPolicy===p && styles.policyChipActive]} onPress={() => setUtxoPolicy(p)}>
@@ -402,63 +404,53 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Amount (ADA)</Text>
+            <AppText style={styles.inputLabel}>Amount (ADA)</AppText>
             <TextInput
               style={styles.input}
               value={amount}
               onChangeText={setAmount}
               placeholder="0.00"
-              placeholderTextColor={CYBERPUNK_COLORS.textSecondary}
+              placeholderTextColor={tokens.palette.textSecondary}
               keyboardType="numeric"
             />
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Note (Optional)</Text>
+            <AppText style={styles.inputLabel}>Note (Optional)</AppText>
             <TextInput
               style={[styles.input, styles.noteInput]}
               value={note}
               onChangeText={setNote}
               placeholder="Transaction note..."
-              placeholderTextColor={CYBERPUNK_COLORS.textSecondary}
+              placeholderTextColor={tokens.palette.textSecondary}
               multiline
             />
           </View>
-
-          <TouchableOpacity
-            style={styles.sendButton}
-            onPress={requireHold ? undefined : handleSend}
-            onPressIn={requireHold ? () => {
-              setHoldProgress(0);
-              const start = Date.now();
-              holdInterval = setInterval(() => {
-                const p = Math.min(100, Math.floor(((Date.now() - start) / holdDurationMs) * 100));
-                setHoldProgress(p);
-              }, 50);
-              holdTimeout = setTimeout(async () => {
-                clearInterval(holdInterval);
-                setHoldProgress(100);
-                await handleSend();
-              }, holdDurationMs);
-            } : undefined}
-            onPressOut={requireHold ? () => {
-              if (holdInterval) clearInterval(holdInterval);
-              if (holdTimeout) clearTimeout(holdTimeout);
-              setHoldProgress(0);
-            } : undefined}
-            disabled={isProcessing}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={[CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent]}
-              style={styles.sendButtonGradient}
-            >
-              <Text style={styles.sendButtonText}>
-                {isProcessing ? 'PROCESSING...' : (requireHold ? `HOLD TO CONFIRM ${holdProgress}%` : 'SEND ADA')}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
+        <AppButton
+          title={isProcessing ? 'PROCESSING...' : (requireHold ? `HOLD TO CONFIRM ${holdProgress}%` : 'SEND ADA')}
+          onPress={requireHold ? undefined : handleSend}
+          disabled={isProcessing}
+          onPressIn={requireHold ? () => {
+            setHoldProgress(0);
+            const start = Date.now();
+            holdInterval = setInterval(() => {
+              const p = Math.min(100, Math.floor(((Date.now() - start) / holdDurationMs) * 100));
+              setHoldProgress(p);
+            }, 50);
+            holdTimeout = setTimeout(async () => {
+              clearInterval(holdInterval);
+              setHoldProgress(100);
+              await handleSend();
+            }, holdDurationMs);
+          } : undefined}
+          onPressOut={requireHold ? () => {
+            if (holdInterval) clearInterval(holdInterval);
+            if (holdTimeout) clearTimeout(holdTimeout);
+            setHoldProgress(0);
+          } : undefined}
+        />
+        </Card>
+        </Container>
         </ScrollView>
       </LinearGradient>
       
@@ -498,14 +490,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   input: {
-    backgroundColor: CYBERPUNK_COLORS.surface,
+    backgroundColor: tokens.palette.surface,
     borderWidth: 1,
-    borderColor: CYBERPUNK_COLORS.border,
+    borderColor: tokens.palette.border,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: CYBERPUNK_COLORS.text,
+    color: tokens.palette.text,
   },
   noteInput: {
     height: 80,

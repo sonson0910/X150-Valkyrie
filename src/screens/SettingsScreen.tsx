@@ -10,6 +10,10 @@ import {
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppText } from '../components/ui/AppText';
+import { tokens } from '../theme/tokens';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
@@ -267,14 +271,12 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Container>
         {/* Security Settings */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security</Text>
+        <Card style={styles.section}>
+          <AppText variant="h2" color={tokens.palette.primary} style={styles.sectionTitle}>Security</AppText>
           
           <SettingItem
             icon="🔐"
@@ -371,11 +373,11 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
               showAutoLockOptions();
             }}
           />
-        </View>
+        </Card>
 
         {/* Wallet Management */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Wallet</Text>
+        <Card style={styles.section}>
+          <AppText variant="h2" color={tokens.palette.primary} style={styles.sectionTitle}>Wallet</AppText>
           
           <SettingItem
             icon="💾"
@@ -390,11 +392,11 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
             description="Update your personal encryption password"
             onPress={handleChangePassword}
           />
-        </View>
+        </Card>
 
         {/* Name Service */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Name Service</Text>
+        <Card style={styles.section}>
+          <AppText variant="h2" color={tokens.palette.primary} style={styles.sectionTitle}>Name Service</AppText>
           <SettingItem
             icon="🧩"
             title={`ADA Handle Resolve: ${nameServiceCfg.adaHandleEnabled ? 'On' : 'Off'}`}
@@ -417,11 +419,11 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
             description={Object.keys(nameServiceCfg.mapping).length ? `${Object.keys(nameServiceCfg.mapping).length} entries` : 'No entries'}
             onPress={() => navigation.navigate('NameServiceManager')}
           />
-        </View>
+        </Card>
 
         {/* Guardian Recovery */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Guardian Recovery</Text>
+        <Card style={styles.section}>
+          <AppText variant="h2" color={tokens.palette.primary} style={styles.sectionTitle}>Guardian Recovery</AppText>
           <SettingItem
             icon="🛡️"
             title={guardianPolicy ? `Guardians: ${guardianPolicy.guardians.length}, Threshold: ${guardianPolicy.threshold}` : 'Setup Guardians'}
@@ -438,11 +440,11 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
               Alert.alert('Recovery Started', `Request: ${req.id}`);
             }}
           />
-        </View>
+        </Card>
 
         {/* Appearance */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
+        <Card style={styles.section}>
+          <AppText variant="h2" color={tokens.palette.primary} style={styles.sectionTitle}>Appearance</AppText>
           
           <SettingItem
             icon="🎨"
@@ -457,11 +459,11 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
               />
             }
           />
-        </View>
+        </Card>
 
         {/* About */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About</Text>
+        <Card style={styles.section}>
+          <AppText variant="h2" color={tokens.palette.primary} style={styles.sectionTitle}>About</AppText>
           
           <SettingItem
             icon="ℹ️"
@@ -475,11 +477,11 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
             description="View terms of service and privacy policy"
             onPress={() => Alert.alert('Legal', 'Terms and privacy policy coming soon')}
           />
-        </View>
+        </Card>
 
         {/* Danger Zone */}
-        <View style={[styles.section, styles.dangerSection]}>
-          <Text style={[styles.sectionTitle, styles.dangerTitle]}>Danger Zone</Text>
+        <Card style={[styles.section, styles.dangerSection]}>
+          <AppText variant="h2" color={tokens.palette.danger} style={styles.sectionTitle}>Danger Zone</AppText>
           
           <SettingItem
             icon="🗑️"
@@ -488,7 +490,8 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
             onPress={handleResetWallet}
             isDanger
           />
-        </View>
+        </Card>
+        </Container>
       </ScrollView>
     </LinearGradient>
   );

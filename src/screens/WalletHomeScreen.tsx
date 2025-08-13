@@ -14,6 +14,11 @@ import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
 import { CYBERPUNK_COLORS } from '../constants/index';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { GradientButton } from '../components/ui/GradientButton';
+import { ResponsiveGrid } from '../components/ui/ResponsiveGrid';
+import { tokens } from '../theme/tokens';
 import { 
   BalanceSkeleton, 
   QuickActionsSkeleton, 
@@ -22,6 +27,7 @@ import {
 import { WalletDataService, TransactionData } from '../services/WalletDataService';
 import { CardanoAPIService } from '../services/CardanoAPIService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { WalletStateService } from '../services/WalletStateService';
 
 type WalletHomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'WalletHome'>;
 
@@ -40,34 +46,17 @@ const WalletHomeScreen: React.FC<Props> = ({ navigation }) => {
 
   // Get current wallet address from wallet state
   const getCurrentWalletAddress = async (): Promise<string> => {
-    // Implement real wallet state management
     try {
-      // Get from wallet state management service
-      // This should integrate with WalletStateService or similar
-      try {
-        const storedAddress = await AsyncStorage.getItem('current_wallet_address');
-        if (storedAddress) {
-          return storedAddress;
-        }
-      } catch (error) {
-        console.warn('Failed to get stored address:', error);
-      }
-      
-      // Get address from Cardano API service
-      try {
-        const cardanoAPI = CardanoAPIService.getInstance();
-        // This would get the current wallet address from the service
-        console.log('Getting address from Cardano API service');
-      } catch (apiError) {
-        console.warn('Failed to get address from API service:', apiError);
-      }
-      
-      // Fallback to placeholder address
-      return 'addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer';
-    } catch (error) {
-      console.warn('Failed to get wallet address, using placeholder:', error);
-      return 'addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer';
-    }
+      const state = WalletStateService.getInstance();
+      if (!state.getCurrentAddress()) await state.initialize();
+      const addr = state.getCurrentAddress();
+      if (addr) return addr;
+    } catch {}
+    try {
+      const storedAddress = await AsyncStorage.getItem('current_wallet_address');
+      if (storedAddress) return storedAddress;
+    } catch {}
+    return 'addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer';
   };
 
   useEffect(() => {
@@ -220,45 +209,27 @@ const WalletHomeScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={onRefresh}
-            tintColor={CYBERPUNK_COLORS.primary}
-          />
-        }
-      >
-        {/* Balance Card */}
-        {isLoading ? (
-          <BalanceSkeleton />
-        ) : (
-          <LinearGradient
-            colors={[CYBERPUNK_COLORS.primary + '20', CYBERPUNK_COLORS.accent + '20']}
-            style={styles.balanceCard}
-          >
-            <Text style={styles.balanceLabel}>Total Balance</Text>
-            <Text style={styles.balanceAmount}>{balance} ADA</Text>
-            <Text style={styles.balanceUsd}>≈ $4,227.37 USD</Text>
-          </LinearGradient>
-        )}
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={tokens.palette.primary} />}>        
+        <Container padded={false}>
+          {isLoading ? (
+            <BalanceSkeleton />
+          ) : (
+            <Card glow style={{ marginBottom: tokens.spacing.xl }}>
+              <Text style={{ color: tokens.palette.textSecondary, marginBottom: tokens.spacing.xs }}>Total Balance</Text>
+              <Text style={{ color: tokens.palette.primary, fontSize: 36, fontWeight: '800', letterSpacing: 0.5 }}>{balance} ADA</Text>
+              <Text style={{ color: tokens.palette.textSecondary, marginTop: tokens.spacing.xs }}>≈ $4,227.37 USD</Text>
+              <View style={{ height: tokens.spacing.lg }} />
+              <ResponsiveGrid>
+                <GradientButton title="Send" onPress={() => navigation.navigate('SendTransaction' as any)} />
+                <GradientButton title="Receive" colors={[tokens.palette.accent, tokens.palette.accentAlt]} onPress={() => navigation.navigate('ReceiveScreen' as any)} />
+                <GradientButton title="Offline" colors={[tokens.palette.primaryAlt, tokens.palette.primary]} onPress={() => navigation.navigate('OfflineTransaction' as any)} />
+                <GradientButton title="Settings" colors={[tokens.palette.surfaceAlt, tokens.palette.accent]} onPress={() => navigation.navigate('Settings' as any)} />
+              </ResponsiveGrid>
+            </Card>
+          )}
 
-        {/* Quick Actions */}
-        {isLoading ? (
-          <QuickActionsSkeleton />
-        ) : (
-          renderQuickActions()
-        )}
-
-        {/* Recent Transactions */}
-        <View style={styles.transactionsSection}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          
           {isLoading ? (
             <>
               <TransactionSkeleton />
@@ -270,16 +241,12 @@ const WalletHomeScreen: React.FC<Props> = ({ navigation }) => {
               {recentTransactions.map((tx: TransactionData) => (
                 <TransactionItem key={tx.id} transaction={tx} />
               ))}
-              
-                        <TouchableOpacity 
-            style={styles.viewAllButton}
-            onPress={() => navigation.navigate('TransactionHistory')}
-          >
-            <Text style={styles.viewAllText}>View All Transactions</Text>
-          </TouchableOpacity>
+              <TouchableOpacity style={styles.viewAllButton} onPress={() => navigation.navigate('TransactionHistory')}>
+                <Text style={styles.viewAllText}>View All Transactions</Text>
+              </TouchableOpacity>
             </>
           )}
-        </View>
+        </Container>
       </ScrollView>
     </LinearGradient>
   );

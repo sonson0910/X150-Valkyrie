@@ -112,15 +112,15 @@ export class WalletDataService {
 
                 // Transform to TransactionData format
                 const transactionData: TransactionData[] = transactions.map((tx: any) => ({
-                    id: tx.hash || `tx_${Date.now()}`,
-                    hash: tx.hash || '',
+                    id: tx.tx_hash || tx.hash || `tx_${Date.now()}`,
+                    hash: tx.tx_hash || tx.hash || '',
                     type: this.determineTransactionType(tx, address),
                     amount: (tx as any).amount || '0',
                     fee: (tx as any).fee || '0',
                     from: (tx as any).from || 'unknown',
                     to: (tx as any).to || 'unknown',
                     status: this.mapTransactionStatus((tx as any).status || 'confirmed'),
-                    timestamp: new Date((tx as any).block_time * 1000 || Date.now()),
+                    timestamp: new Date(((tx as any).block_time || (tx as any).time || Date.now()) * 1000),
                     blockHeight: 0, // Will be updated below
                     confirmations: 0 // Will be updated below
                 }));

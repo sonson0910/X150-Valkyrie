@@ -55,9 +55,15 @@ export class BluetoothTransferService {
             // This would use react-native-ble-plx or similar library
             console.log('Initializing Bluetooth service...');
 
-            // Implement with actual BLE library
-            // const BleManager = require('react-native-ble-plx').BleManager;
-            // this.bleManager = new BleManager();
+            // Implement with actual BLE library when available
+            try {
+                // @ts-ignore dynamic require to avoid breaking web
+                const ble = require('react-native-ble-plx');
+                if (ble && ble.BleManager) {
+                    this.bleManager = new ble.BleManager();
+                    console.log('react-native-ble-plx detected and initialized');
+                }
+            } catch {}
 
             // Initialize BLE manager with proper configuration
             if (this.bleManager) {
@@ -397,11 +403,24 @@ export class BluetoothTransferService {
                 }
             };
 
-            // ECDH key agreement (ephemeral)
+            // ECDH key agreement (ephemeral) - production: cần trao đổi public key thật
             const sessionId = `sess_${Date.now()}`;
             const myKeyPair = await this.secure.generateEphemeralKeyPair();
-            // In real flow, send myKeyPair.publicKeyHex to merchant and receive peer public key
-            const peerKey = myKeyPair.publicKeyRaw; // placeholder self-use
+            // TODO (production): gửi myKeyPair.publicKeyHex tới merchant, nhận peerPublicKey thực sự (verify via chữ ký của merchant)
+            // Đính kèm chứng thực danh tính (ECDSA) để chống MITM
+            // Resolve merchant public key nếu có cấu hình (khung verify)
+            let peerKey = myKeyPair.publicKeyRaw; // dev placeholder default
+            try {
+                const { MerchantIdentityService } = require('./MerchantIdentityService');
+                const { SecureIdentityService } = require('./SecureIdentityService');
+                const merchantIdentity = MerchantIdentityService.getInstance();
+                const secureIdentity = SecureIdentityService.getInstance();
+                await secureIdentity.initialize();
+                const resolvedHex = await merchantIdentity.getMerchantPublicKeyHex(merchantId);
+                if (resolvedHex) {
+                    peerKey = secureIdentity['hexToBytes'] ? secureIdentity['hexToBytes'](resolvedHex) : new Uint8Array(Buffer.from(resolvedHex, 'hex'));
+                }
+            } catch {}
             const sharedKey = await this.secure.deriveSharedKey(myKeyPair.privateKey, peerKey);
             const frames = await this.secure.buildFrames(
                 sessionId,

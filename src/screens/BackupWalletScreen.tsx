@@ -18,11 +18,12 @@ import { RootStackParamList } from '../types/navigation';
 import { CYBERPUNK_COLORS, STORAGE_KEYS } from '../constants/index';
 import { BiometricService } from '../services/BiometricService';
 import { MnemonicEncryptionService } from '../services/MnemonicEncryptionService';
-import { 
-  CyberpunkButton, 
-  CyberpunkCard, 
-  FullScreenLoader 
-} from '../components/index';
+import { FullScreenLoader } from '../components/index';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppButton } from '../components/ui/AppButton';
+import { AppText } from '../components/ui/AppText';
+import { tokens } from '../theme/tokens';
 
 type BackupWalletScreenNavigationProp = StackNavigationProp<RootStackParamList, 'BackupWallet'>;
 
@@ -147,102 +148,64 @@ const BackupWalletScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Warning Card */}
-        <CyberpunkCard variant="outline" style={styles.warningCard}>
-          <Text style={styles.warningTitle}>🛡️ Secure Backup</Text>
-          <Text style={styles.warningText}>
-            This is your encrypted mnemonic phrase. It only works with your personal password in this Valkyrie wallet.
-          </Text>
-        </CyberpunkCard>
+        <Container>
+          {/* Warning Card */}
+          <Card variant="outline" style={styles.warningCard}>
+            <AppText variant="h3" color={tokens.palette.warning} style={styles.warningTitle}>🛡️ Secure Backup</AppText>
+            <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.warningText}>
+              This is your encrypted mnemonic phrase. It only works with your personal password in this Valkyrie wallet.
+            </AppText>
+          </Card>
 
-        {/* Mnemonic Display */}
-        <CyberpunkCard variant="glow" style={styles.mnemonicCard}>
-          <Text style={styles.mnemonicTitle}>Encrypted Mnemonic Phrase</Text>
-          
-          <View style={styles.mnemonicGrid}>
-            {fakeMnemonic.split(' ').map((word, index) => (
-              <View key={index} style={styles.mnemonicWord}>
-                <Text style={styles.mnemonicIndex}>{index + 1}</Text>
-                <Text style={styles.mnemonicText}>{word}</Text>
-              </View>
-            ))}
+          {/* Mnemonic Display */}
+          <Card glow style={styles.mnemonicCard}>
+            <AppText variant="h2" color={tokens.palette.primary} style={styles.mnemonicTitle}>Encrypted Mnemonic Phrase</AppText>
+            <View style={styles.mnemonicGrid}>
+              {fakeMnemonic.split(' ').map((word, index) => (
+                <View key={index} style={styles.mnemonicWord}>
+                  <AppText variant="caption" color={tokens.palette.textSecondary} style={styles.mnemonicIndex}>{index + 1}</AppText>
+                  <AppText variant="body2" style={styles.mnemonicText}>{word}</AppText>
+                </View>
+              ))}
+            </View>
+            <View style={styles.checksumContainer}>
+              <AppText variant="caption" color={tokens.palette.textSecondary} style={styles.checksumLabel}>Checksum:</AppText>
+              <AppText variant="caption" color={tokens.palette.primary} style={styles.checksumText}>{checksum}</AppText>
+            </View>
+          </Card>
+
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <AppButton title="Copy to Clipboard" onPress={handleCopyMnemonic} style={styles.actionButton} />
+            <AppButton title="Share Backup" variant="secondary" onPress={handleShare} style={styles.actionButton} />
+            <AppButton title="Export QR Code" variant="ghost" onPress={handleExportQR} style={styles.actionButton} />
           </View>
-          
-          <View style={styles.checksumContainer}>
-            <Text style={styles.checksumLabel}>Checksum:</Text>
-            <Text style={styles.checksumText}>{checksum}</Text>
-          </View>
-        </CyberpunkCard>
 
-        {/* Action Buttons */}
-        <View style={styles.actionButtons}>
-          <CyberpunkButton
-            title="Copy to Clipboard"
-            onPress={handleCopyMnemonic}
-            icon="📋"
-            style={styles.actionButton}
-          />
-          
-          <CyberpunkButton
-            title="Share Backup"
-            onPress={handleShare}
-            variant="outline"
-            icon="📤"
-            style={styles.actionButton}
-          />
-          
-          <CyberpunkButton
-            title="Export QR Code"
-            onPress={handleExportQR}
-            variant="outline"
-            icon="📱"
-            style={styles.actionButton}
-          />
-        </View>
+          {/* Security Instructions */}
+          <Card style={styles.instructionsCard}>
+            <AppText variant="h3" color={tokens.palette.primary} style={styles.instructionsTitle}>📖 Backup Instructions</AppText>
+            <View style={styles.instructionsList}>
+              <InstructionItem step="1" text="Write down this encrypted mnemonic phrase on paper" />
+              <InstructionItem step="2" text="Store it in a secure location (safe, bank vault)" />
+              <InstructionItem step="3" text="Remember your personal password - it's required to restore" />
+              <InstructionItem step="4" text="This mnemonic only works with Valkyrie wallet" />
+              <InstructionItem step="5" text="Never share your personal password with anyone" />
+            </View>
+          </Card>
 
-        {/* Security Instructions */}
-        <CyberpunkCard style={styles.instructionsCard}>
-          <Text style={styles.instructionsTitle}>📖 Backup Instructions</Text>
-          
-          <View style={styles.instructionsList}>
-            <InstructionItem
-              step="1"
-              text="Write down this encrypted mnemonic phrase on paper"
-            />
-            <InstructionItem
-              step="2"
-              text="Store it in a secure location (safe, bank vault)"
-            />
-            <InstructionItem
-              step="3"
-              text="Remember your personal password - it's required to restore"
-            />
-            <InstructionItem
-              step="4"
-              text="This mnemonic only works with Valkyrie wallet"
-            />
-            <InstructionItem
-              step="5"
-              text="Never share your personal password with anyone"
-            />
-          </View>
-        </CyberpunkCard>
-
-        {/* Security Notice */}
-        <CyberpunkCard variant="outline" style={styles.securityCard}>
-          <Text style={styles.securityTitle}>⚠️ Important Security Notice</Text>
-          <Text style={styles.securityText}>
-            • This mnemonic is encrypted and useless without your password{'\n'}
-            • Screenshots and digital storage are still not recommended{'\n'}
-            • Physical backup on paper is the most secure method{'\n'}
-            • If you lose your password, your wallet cannot be recovered
-          </Text>
-        </CyberpunkCard>
+          {/* Security Notice */}
+          <Card variant="outline" style={styles.securityCard}>
+            <AppText variant="h3" color={tokens.palette.warning} style={styles.securityTitle}>⚠️ Important Security Notice</AppText>
+            <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.securityText}>
+              • This mnemonic is encrypted and useless without your password{"\n"}
+              • Screenshots and digital storage are still not recommended{"\n"}
+              • Physical backup on paper is the most secure method{"\n"}
+              • If you lose your password, your wallet cannot be recovered
+            </AppText>
+          </Card>
+        </Container>
       </ScrollView>
     </LinearGradient>
   );

@@ -82,11 +82,22 @@ export class CardanoAPIService {
             });
 
             if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(`API Error ${response.status}: ${errorData.message || response.statusText}`);
+                let message = response.statusText;
+                try {
+                    const asJson = await response.json();
+                    if (asJson && typeof asJson.message === 'string') message = asJson.message;
+                } catch {}
+                throw new Error(`API Error ${response.status}: ${message}`);
             }
 
-            return await response.json();
+            // Tùy endpoint, parse phù hợp (JSON hoặc text)
+            const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                return await response.json();
+            }
+            // /tx/submit trả text (hash)
+            const txt = await response.text();
+            return txt as unknown as T;
 
         } catch (error) {
             console.error(`Cardano API call failed for ${endpoint}:`, error);

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 import { ErrorHandler, ErrorType, ErrorSeverity } from './ErrorHandler';
 
 export interface NetworkConfiguration {
@@ -19,6 +20,11 @@ export interface SecurityConfiguration {
         enabled: boolean;
         strictMode: boolean;
         allowedDomains: string[];
+        hosts?: Record<string, {
+            aliases?: string[];
+            strict?: boolean;
+            fingerprints?: string[];
+        }>;
     };
     biometricAuth: {
         enabled: boolean;
@@ -136,7 +142,17 @@ export class ConfigurationService {
                 certificatePinning: {
                     enabled: true,
                     strictMode: true,
-                    allowedDomains: ['api.blockfrost.io', 'cardanoscan.io', 'adastat.net']
+                    allowedDomains: ['api.blockfrost.io', 'cardanoscan.io', 'adastat.net'],
+                    hosts: {
+                        'api.blockfrost.io': {
+                            aliases: ['blockfrost'],
+                            strict: true,
+                            fingerprints: [
+                                // Cập nhật fingerprint SHA-256 thật khi phát hành
+                                'sha256/REPLACE_WITH_REAL_BLOCKFROST_FINGERPRINT'
+                            ]
+                        }
+                    }
                 },
                 biometricAuth: {
                     enabled: true,
@@ -273,6 +289,11 @@ export class ConfigurationService {
                     this.config.performance.monitoring.enabled = true;
                     this.config.security.certificatePinning.strictMode = true;
                     this.config.security.biometricAuth.fallbackToPasscode = false;
+                    // Bắt buộc kích hoạt certificate pinning trong production
+                    this.setSecuritySetting('certificatePinning', {
+                        ...this.config.security.certificatePinning,
+                        enabled: true
+                    });
                     break;
             }
 
@@ -340,6 +361,14 @@ export class ConfigurationService {
      */
     getApiKey(service: 'blockfrost' | 'cardanoscan' | 'adastat', network: 'mainnet' | 'testnet'): string | undefined {
         try {
+            // Prefer runtime secrets if available (EAS/CI)
+            const runtimeVar = typeof process !== 'undefined' ? (process.env as any)?.BLOCKFROST_API_KEY as string | undefined;
+            // Prefer Expo extra
+            const extra: any = (Constants as any)?.expoConfig?.extra || (Constants as any)?.manifest?.extra || {};
+            const extraKey = extra?.blockfrostApiKey as string | undefined;
+            if (service === 'blockfrost' && (runtimeVar || extraKey)) {
+                return runtimeVar || extraKey;
+            }
             const networkConfig = this.config.network[network];
 
             switch (service) {

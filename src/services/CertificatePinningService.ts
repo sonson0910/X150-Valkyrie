@@ -16,6 +16,7 @@ export interface PinnedCertificate {
     fingerprints: string[];
     backupFingerprints?: string[];
     enforceStrict: boolean;
+    aliases?: string[]; // native cert aliases for rn-ssl-pinning
 }
 
 export class CertificatePinningService {
@@ -35,6 +36,7 @@ export class CertificatePinningService {
         this.errorHandler = ErrorHandler.getInstance();
         this.configService = ConfigurationService.getInstance();
         this.initializeDefaultCertificates();
+        this.applyHostOverridesFromConfig();
     }
 
     /**
@@ -45,31 +47,18 @@ export class CertificatePinningService {
         this.addPinnedCertificate({
             hostname: 'api.blockfrost.io',
             fingerprints: [
-                'sha256/47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=', // Real Blockfrost certificate
-                'sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=' // Backup certificate (placeholder)
+                // TODO: Cập nhật fingerprint thật bằng quy trình phát hành
+                'sha256/REPLACE_ME_WITH_REAL_FINGERPRINT',
             ],
-            enforceStrict: true
+            enforceStrict: true,
+            aliases: ['blockfrost']
         });
 
         // HTTPBin certificates - Real SHA256 fingerprints
-        this.addPinnedCertificate({
-            hostname: 'httpbin.org',
-            fingerprints: [
-                'sha256/BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=', // Real HTTPBin certificate
-                'sha256/CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC=' // Backup certificate
-            ],
-            enforceStrict: false
-        });
+        // Ví dụ khác nên bị loại bỏ trong sản phẩm
 
         // Google certificates - Real SHA256 fingerprints for connectivity testing
-        this.addPinnedCertificate({
-            hostname: 'google.com',
-            fingerprints: [
-                'sha256/DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD=', // Real Google certificate
-                'sha256/EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE=' // Backup certificate
-            ],
-            enforceStrict: false
-        });
+        // Google/httpbin loại bỏ khỏi danh sách pinning mặc định
 
         // CardanoScan certificates
         this.addPinnedCertificate({
@@ -131,7 +120,7 @@ export class CertificatePinningService {
                     return true;
                 }
 
-                // Fetch certificate information
+                // Fetch certificate information (best-effort trên web; native nên dùng pinning lib)
                 const certificateInfo = await this.fetchCertificateInfo(url);
                 if (!certificateInfo) {
                     console.warn(`Could not fetch certificate for ${hostname}`);
@@ -139,7 +128,7 @@ export class CertificatePinningService {
                 }
 
                 // Validate certificate fingerprint
-                const isValid = this.validateFingerprint(certificateInfo, pinnedCert);
+                const isValid = this.validateFingerprint(certificateInfo, pinnedCert) && this.validateCertificateExpiration(certificateInfo);
 
                 if (!isValid && pinnedCert.enforceStrict) {
                     const error = new Error(`Certificate pinning failed for ${hostname}`);
@@ -567,6 +556,28 @@ export class CertificatePinningService {
             const match = url.match(/^https?:\/\/([^\/]+)/);
             return match ? match[1] : url;
         }
+    }
+
+    /**
+     * Get native cert aliases for a hostname (for rn-ssl-pinning)
+     */
+    getAliasesForHost(hostname: string): string[] {
+        const cert = this.pinnedCertificates.get(hostname);
+        return cert?.aliases ? [...cert.aliases] : [];
+    }
+
+    private applyHostOverridesFromConfig(): void {
+        try {
+            const sec = this.configService.getSecurityConfiguration();
+            const hosts = sec.certificatePinning?.hosts || {};
+            for (const [host, cfg] of Object.entries(hosts)) {
+                const existing = this.pinnedCertificates.get(host) || { hostname: host, fingerprints: [], enforceStrict: !!cfg.strict } as PinnedCertificate;
+                if (cfg.aliases) existing.aliases = cfg.aliases;
+                if (typeof cfg.strict === 'boolean') existing.enforceStrict = cfg.strict;
+                if (Array.isArray(cfg.fingerprints)) existing.fingerprints = cfg.fingerprints;
+                this.pinnedCertificates.set(host, existing);
+            }
+        } catch {}
     }
 
     /**

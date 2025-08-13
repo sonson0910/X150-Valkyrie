@@ -15,6 +15,11 @@ import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
 import { CYBERPUNK_COLORS } from '../constants/index';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppText } from '../components/ui/AppText';
+import { AppButton } from '../components/ui/AppButton';
+import { tokens } from '../theme/tokens';
 import { 
   PortfolioAnalyticsService, 
   PortfolioSummary, 
@@ -116,7 +121,7 @@ const PortfolioAnalyticsScreen: React.FC<Props> = ({ navigation }) => {
       {portfolioSummary && (
         <>
           {/* Total Value Card */}
-          <CyberpunkCard style={styles.overviewCard}>
+          <Card style={styles.overviewCard}>
             <Text style={styles.overviewTitle}>Portfolio Value</Text>
             <Text style={styles.totalValue}>{formatCurrency(portfolioSummary.totalValue)}</Text>
             
@@ -131,7 +136,7 @@ const PortfolioAnalyticsScreen: React.FC<Props> = ({ navigation }) => {
                 30d: {formatPercentage(portfolioSummary.totalChange30d)}
               </Text>
             </View>
-          </CyberpunkCard>
+          </Card>
 
           {/* Asset Breakdown */}
           <View style={styles.breakdownContainer}>
@@ -169,20 +174,20 @@ const PortfolioAnalyticsScreen: React.FC<Props> = ({ navigation }) => {
             <Text style={styles.sectionTitle}>Quick Stats</Text>
             
             <View style={styles.statsGrid}>
-              <CyberpunkCard style={styles.statCard}>
+              <Card style={styles.statCard}>
                 <Text style={styles.statValue}>{formatCurrency(portfolioSummary.rewardsValue)}</Text>
                 <Text style={styles.statLabel}>Total Rewards</Text>
-              </CyberpunkCard>
+              </Card>
               
-              <CyberpunkCard style={styles.statCard}>
+              <Card style={styles.statCard}>
                 <Text style={styles.statValue}>{portfolioAssets.length}</Text>
                 <Text style={styles.statLabel}>Total Assets</Text>
-              </CyberpunkCard>
+              </Card>
               
-              <CyberpunkCard style={styles.statCard}>
+              <Card style={styles.statCard}>
                 <Text style={styles.statValue}>{formatCurrency(portfolioSummary.lpValue)}</Text>
                 <Text style={styles.statLabel}>Liquidity</Text>
-              </CyberpunkCard>
+              </Card>
             </View>
           </View>
         </>
@@ -461,17 +466,12 @@ const PortfolioAnalyticsScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Portfolio Analytics</Text>
-          <Text style={styles.subtitle}>
-            Comprehensive insights into your Cardano portfolio
-          </Text>
+          <AppText variant="h1" color={tokens.palette.primary} style={styles.title}>Portfolio Analytics</AppText>
+          <AppText variant="body" color={tokens.palette.textSecondary} style={styles.subtitle}>Comprehensive insights into your Cardano portfolio</AppText>
         </View>
 
         {/* Tab Navigation */}

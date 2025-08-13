@@ -10,6 +10,11 @@ import {
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppText } from '../components/ui/AppText';
+import { AppButton } from '../components/ui/AppButton';
+import { tokens } from '../theme/tokens';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 
@@ -91,7 +96,7 @@ const RestoreWalletScreen: React.FC<Props> = ({ navigation }) => {
         }
       }
 
-      // If transformed, restore to original
+      // If transformed, restore to original using password
       let originalMnemonic = encryptedMnemonic;
       const words = encryptedMnemonic.trim().split(/\s+/);
       if (isTransformed || words.length === 36) {
@@ -103,8 +108,22 @@ const RestoreWalletScreen: React.FC<Props> = ({ navigation }) => {
         }
       }
 
-      // Simulate next steps or initialize wallet service with originalMnemonic
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Initialize wallet service with original mnemonic
+      const walletService = CardanoWalletService.getInstance();
+      const ok = await walletService.initializeFromMnemonic(originalMnemonic);
+      if (!ok) {
+        Alert.alert('Restore Failed', 'Wallet initialization failed');
+        return false;
+      }
+      // Optionally derive account 0
+      try {
+        const account = await walletService.createAccount(0, walletName || 'Restored Wallet');
+        await SecureStore.setItemAsync(
+          STORAGE_KEYS.ACCOUNTS,
+          JSON.stringify([account])
+        );
+      } catch {}
+      await new Promise(resolve => setTimeout(resolve, 500));
       return true;
     } catch (error) {
       console.error('Wallet restoration failed:', error);
@@ -245,54 +264,45 @@ const RestoreWalletScreen: React.FC<Props> = ({ navigation }) => {
 
   return (
     <>
-      <LinearGradient
-        colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-        style={styles.container}
-      >
+      <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Progress indicator */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${(step / 2) * 100}%` }]} />
+          <Container>
+            {/* Progress indicator */}
+            <View style={styles.progressContainer}>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${(step / 2) * 100}%` }]} />
+              </View>
+              <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.progressText}>Step {step} of 2</AppText>
             </View>
-            <Text style={styles.progressText}>Step {step} of 2</Text>
-          </View>
 
-          {/* Step content */}
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
+            {/* Step content */}
+            {step === 1 && renderStep1()}
+            {step === 2 && renderStep2()}
 
-          {/* Action buttons */}
-          <View style={styles.buttonContainer}>
-            {step > 1 && (
-              <CyberpunkButton
-                title="Back"
-                onPress={() => setStep(step - 1)}
-                variant="outline"
-                style={styles.backButton}
+            {/* Action buttons */}
+            <View style={styles.buttonContainer}>
+              {step > 1 && (
+                <AppButton title="Back" variant="ghost" onPress={() => setStep(step - 1)} style={styles.backButton} />
+              )}
+              
+              <AppButton
+                title={step === 2 ? 'RESTORE WALLET' : 'NEXT'}
+                onPress={handleNextStep}
+                disabled={step === 1 ? !encryptedMnemonic.trim() : step === 2 ? !userPassword.trim() : false}
+                style={styles.nextButton}
               />
-            )}
-            
-            <CyberpunkButton
-              title={step === 2 ? 'RESTORE WALLET' : 'NEXT'}
-              onPress={handleNextStep}
-              disabled={
-                step === 1 ? !encryptedMnemonic.trim() : 
-                step === 2 ? !userPassword.trim() : false
-              }
-              style={styles.nextButton}
-            />
-          </View>
+            </View>
 
-          {/* Help section */}
-          <CyberpunkCard variant="outline" style={styles.helpCard}>
-            <Text style={styles.helpTitle}>❓ Need Help?</Text>
-            <Text style={styles.helpText}>
-              • Make sure you have the correct encrypted mnemonic from Valkyrie{'\n'}
-              • Remember your personal password - it's case sensitive{'\n'}
-              • Contact support if you continue having issues
-            </Text>
-          </CyberpunkCard>
+            {/* Help section */}
+            <Card variant="outline" style={styles.helpCard}>
+              <AppText variant="h3" color={tokens.palette.warning} style={styles.helpTitle}>❓ Need Help?</AppText>
+              <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.helpText}>
+                • Make sure you have the correct encrypted mnemonic from Valkyrie{"\n"}
+                • Remember your personal password - it's case sensitive{"\n"}
+                • Contact support if you continue having issues
+              </AppText>
+            </Card>
+          </Container>
         </ScrollView>
       </LinearGradient>
 

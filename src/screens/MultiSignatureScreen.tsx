@@ -16,7 +16,12 @@ import * as Haptics from 'expo-haptics';
 import { RootStackParamList } from '../types/navigation';
 import { CYBERPUNK_COLORS } from '../constants/index';
 import { MultiSignatureService, MultiSigWallet, MultiSigTransaction } from '../services/MultiSignatureService';
-import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '../components/index';
+import { LoadingSpinner } from '../components/index';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppButton } from '../components/ui/AppButton';
+import { AppText } from '../components/ui/AppText';
+import { tokens } from '../theme/tokens';
 
 type MultiSignatureScreenNavigationProp = StackNavigationProp<RootStackParamList, 'MultiSignature'>;
 
@@ -150,7 +155,7 @@ const MultiSignatureScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const renderWalletCard = (wallet: MultiSigWallet) => (
-    <CyberpunkCard key={wallet.id} style={styles.walletCard}>
+    <Card key={wallet.id} style={styles.walletCard}>
       <View style={styles.walletHeader}>
         <View style={styles.walletInfo}>
           <Text style={styles.walletName}>{wallet.name}</Text>
@@ -185,26 +190,14 @@ const MultiSignatureScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       <View style={styles.walletActions}>
-        <CyberpunkButton
-          title="Add Signer"
-          onPress={() => {
-            setSelectedWallet(wallet);
-            setShowSignerModal(true);
-          }}
-          variant="outline"
-          style={styles.actionButton}
-        />
-        <CyberpunkButton
-          title="Create Transaction"
-          onPress={() => navigation.navigate('CreateMultiSigTransaction', { walletId: wallet.id })}
-          style={styles.actionButton}
-        />
+        <AppButton title="Add Signer" variant="secondary" onPress={() => { setSelectedWallet(wallet); setShowSignerModal(true); }} style={styles.actionButton} />
+        <AppButton title="Create Transaction" onPress={() => navigation.navigate('CreateMultiSigTransaction', { walletId: wallet.id })} style={styles.actionButton} />
       </View>
-    </CyberpunkCard>
+    </Card>
   );
 
   const renderTransactionCard = (tx: MultiSigTransaction) => (
-    <CyberpunkCard key={tx.id} style={styles.transactionCard}>
+    <Card key={tx.id} style={styles.transactionCard}>
       <View style={styles.transactionHeader}>
         <Text style={styles.transactionId}>TX: {tx.id.slice(0, 8)}...</Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(tx.status) }]}>
@@ -232,14 +225,9 @@ const MultiSignatureScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       {tx.status === 'pending' && (
-        <CyberpunkButton
-          title="Sign Transaction"
-          onPress={() => navigation.navigate('SignMultiSigTransaction', { transactionId: tx.id })}
-          variant="outline"
-          style={styles.signButton}
-        />
+        <AppButton title="Sign Transaction" variant="secondary" onPress={() => navigation.navigate('SignMultiSigTransaction', { transactionId: tx.id })} style={styles.signButton} />
       )}
-    </CyberpunkCard>
+    </Card>
   );
 
   const getStatusColor = (status: string): string => {
@@ -259,32 +247,16 @@ const MultiSignatureScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Multi-Signature Wallets</Text>
-          <Text style={styles.subtitle}>
-            Manage shared wallets with multiple signers
-          </Text>
+          <AppText variant="h1" color={tokens.palette.primary} style={styles.title}>Multi-Signature Wallets</AppText>
+          <AppText variant="body" color={tokens.palette.textSecondary} style={styles.subtitle}>Manage shared wallets with multiple signers</AppText>
         </View>
 
         {/* Create Wallet Button */}
-        <TouchableOpacity
-          style={styles.createButton}
-          onPress={() => setShowCreateModal(true)}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={[CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent]}
-            style={styles.createButtonGradient}
-          >
-            <Text style={styles.createButtonText}>+ CREATE NEW WALLET</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+        <AppButton title="+ CREATE NEW WALLET" onPress={() => setShowCreateModal(true)} style={styles.createButton} />
 
         {/* Wallets Section */}
         <View style={styles.section}>
@@ -292,9 +264,7 @@ const MultiSignatureScreen: React.FC<Props> = ({ navigation }) => {
           {wallets.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>No multi-signature wallets yet</Text>
-              <Text style={styles.emptySubtext}>
-                Create your first shared wallet to get started
-              </Text>
+              <Text style={styles.emptySubtext}>Create your first shared wallet to get started</Text>
             </View>
           ) : (
             wallets.map(renderWalletCard)
@@ -381,17 +351,8 @@ const MultiSignatureScreen: React.FC<Props> = ({ navigation }) => {
             />
 
             <View style={styles.modalActions}>
-              <CyberpunkButton
-                title="Cancel"
-                onPress={() => setShowCreateModal(false)}
-                variant="outline"
-                style={styles.modalButton}
-              />
-              <CyberpunkButton
-                title="Create Wallet"
-                onPress={handleCreateWallet}
-                style={styles.modalButton}
-              />
+              <AppButton title="Cancel" variant="ghost" onPress={() => setShowCreateModal(false)} style={styles.modalButton} />
+              <AppButton title="Create Wallet" onPress={handleCreateWallet} style={styles.modalButton} />
             </View>
           </View>
         </View>
@@ -434,17 +395,8 @@ const MultiSignatureScreen: React.FC<Props> = ({ navigation }) => {
             />
 
             <View style={styles.modalActions}>
-              <CyberpunkButton
-                title="Cancel"
-                onPress={() => setShowSignerModal(false)}
-                variant="outline"
-                style={styles.modalButton}
-              />
-              <CyberpunkButton
-                title="Add Signer"
-                onPress={handleAddSigner}
-                style={styles.modalButton}
-              />
+              <AppButton title="Cancel" variant="ghost" onPress={() => setShowSignerModal(false)} style={styles.modalButton} />
+              <AppButton title="Add Signer" onPress={handleAddSigner} style={styles.modalButton} />
             </View>
           </View>
         </View>

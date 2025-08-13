@@ -1,8 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Modal } from 'react-native';
 import { CYBERPUNK_COLORS } from '../constants';
 import { Transaction } from '../types/wallet';
 import { CardanoAPIService } from '../services/CardanoAPIService';
+import { Card } from '../components/ui/Card';
+import { AppText } from '../components/ui/AppText';
+import { AppButton } from '../components/ui/AppButton';
+import { tokens } from '../theme/tokens';
 
 type Props = {
   visible: boolean;
@@ -23,37 +27,37 @@ const TransactionPreviewModal: React.FC<Props> = ({ visible, onClose, transactio
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={styles.card}>
-          <Text style={styles.title}>Transaction Preview</Text>
-          <Text style={styles.text}>From: {transaction.from}</Text>
-          <Text style={styles.text}>To: {transaction.to}</Text>
-          <Text style={styles.text}>Amount: {ada} ADA</Text>
-          <Text style={styles.text}>Fee: {feeAda} ADA</Text>
+        <Card style={styles.cardBox}>
+          <AppText variant="h2" color={tokens.palette.primary} style={styles.title}>Transaction Preview</AppText>
+          <AppText>From: {transaction.from}</AppText>
+          <AppText>To: {transaction.to}</AppText>
+          <AppText>Amount: {ada} ADA</AppText>
+          <AppText>Fee: {feeAda} ADA</AppText>
           {typeof ttl === 'number' && (
-            <Text style={[styles.text, ttlWarning && { color: CYBERPUNK_COLORS.warning }]}>TTL: {ttl}{ttlWarning ? ' (expiring soon)' : ''}</Text>
+            <AppText color={ttlWarning ? tokens.palette.warning : tokens.palette.text}>TTL: {ttl}{ttlWarning ? ' (expiring soon)' : ''}</AppText>
           )}
           {!!minAdaAda && (
-            <Text style={styles.text}>Min-ADA Required: {minAdaAda} ADA</Text>
+            <AppText>Min-ADA Required: {minAdaAda} ADA</AppText>
           )}
-          <Text style={styles.text}>Change (est.): {changeAda} ADA</Text>
+          <AppText>Change (est.): {changeAda} ADA</AppText>
           {inputs.length > 0 && (
             <View style={{ marginTop: 10 }}>
-              <Text style={styles.subtitle}>Inputs</Text>
+              <AppText variant="h3" color={tokens.palette.accent} style={styles.subtitle}>Inputs</AppText>
               {inputs.map((i, idx) => (
-                <Text key={`${i.tx_hash}:${i.tx_index}`} style={styles.text}>#{idx + 1} {i.tx_hash.slice(0,8)}...:{i.tx_index}</Text>
+                <AppText key={`${i.tx_hash}:${i.tx_index}`}>#{idx + 1} {i.tx_hash.slice(0,8)}...:{i.tx_index}</AppText>
               ))}
             </View>
           )}
           {!!transaction.assets?.length && (
             <View style={{ marginTop: 10 }}>
-              <Text style={styles.subtitle}>Assets</Text>
+              <AppText variant="h3" color={tokens.palette.accent} style={styles.subtitle}>Assets</AppText>
               {transaction.assets.map(a => (
-                <Text key={a.unit} style={styles.text}>{a.unit.slice(0,56)}... {a.quantity}</Text>
+                <AppText key={a.unit}>{a.unit.slice(0,56)}... {a.quantity}</AppText>
               ))}
             </View>
           )}
-          <TouchableOpacity style={styles.btn} onPress={onClose}><Text style={styles.btnText}>Close</Text></TouchableOpacity>
-        </View>
+          <AppButton title="Close" variant="secondary" onPress={onClose} style={{ marginTop: 16 }} />
+        </Card>
       </View>
     </Modal>
   );
@@ -61,12 +65,9 @@ const TransactionPreviewModal: React.FC<Props> = ({ visible, onClose, transactio
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  card: { width: '90%', backgroundColor: CYBERPUNK_COLORS.surface, borderRadius: 12, padding: 16, borderWidth: 1, borderColor: CYBERPUNK_COLORS.border },
-  title: { color: CYBERPUNK_COLORS.primary, fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  subtitle: { color: CYBERPUNK_COLORS.accent, fontSize: 16, fontWeight: '600', marginTop: 4 },
-  text: { color: CYBERPUNK_COLORS.text, marginTop: 4 },
-  btn: { backgroundColor: CYBERPUNK_COLORS.primary, padding: 10, borderRadius: 10, marginTop: 16 },
-  btnText: { color: '#0a0e27', textAlign: 'center', fontWeight: '700' },
+  cardBox: { width: '90%' },
+  title: { marginBottom: 8 },
+  subtitle: { marginTop: 4 },
 });
 
 export default TransactionPreviewModal;

@@ -2,6 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, TextInput, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CYBERPUNK_COLORS } from '../constants';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppText } from '../components/ui/AppText';
+import { AppButton } from '../components/ui/AppButton';
+import { tokens } from '../theme/tokens';
 import { GuardianRecoveryService, GuardianPolicy, RecoveryRequest } from '../services/GuardianRecoveryService';
 import { GuardianKeyService } from '../services/GuardianKeyService';
 
@@ -97,58 +102,60 @@ const GuardianRecoveryScreen: React.FC = () => {
   };
 
   return (
-    <LinearGradient colors={[CYBERPUNK_COLORS.background, '#1a1f3a']} style={styles.container}>
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-      <View style={styles.section}>
-        <Text style={styles.title}>Guardian Policy</Text>
-        {policy ? (
-          <>
-            <Text style={styles.text}>Threshold: {policy.threshold}</Text>
-            <Text style={styles.text}>Cooldown: {policy.cooldownHours}h</Text>
-            <FlatList
-              data={policy.guardians}
-              keyExtractor={g => g.id}
-              renderItem={({ item }) => (
-                <View style={[styles.guardianItem, { flexDirection: 'row', justifyContent: 'space-between' }]}>
-                  <Text style={styles.text}>{item.label} • {item.contact}</Text>
-                  <TouchableOpacity onPress={() => removeGuardian(item.id)}><Text style={[styles.text, { color: CYBERPUNK_COLORS.warning }]}>Remove</Text></TouchableOpacity>
-                </View>
-              )}
-            />
-          </>
-        ) : (
-          <Text style={styles.text}>No policy configured</Text>
-        )}
-        <View style={{ marginTop: 8 }}>
-          <Text style={styles.text}>Threshold</Text>
-          <TextInput value={threshold} onChangeText={setThreshold} style={styles.input} keyboardType="numeric" />
-          <Text style={[styles.text, { marginTop: 8 }]}>Cooldown (hours)</Text>
-          <TextInput value={cooldown} onChangeText={setCooldown} style={styles.input} keyboardType="numeric" />
-          <TouchableOpacity style={styles.btn} onPress={savePolicyBasics}><Text style={styles.btnText}>Save Policy</Text></TouchableOpacity>
-        </View>
-        <View style={{ marginTop: 12 }}>
-          <Text style={styles.text}>Add Guardian</Text>
-          <TextInput placeholder="Label" placeholderTextColor={CYBERPUNK_COLORS.textSecondary} style={styles.input} value={newGuardianLabel} onChangeText={setNewGuardianLabel} />
-          <TextInput placeholder="Contact (email/phone/deviceId)" placeholderTextColor={CYBERPUNK_COLORS.textSecondary} style={styles.input} value={newGuardianContact} onChangeText={setNewGuardianContact} />
-          <TouchableOpacity style={styles.btn} onPress={addGuardian}><Text style={styles.btnText}>Add Guardian</Text></TouchableOpacity>
-        </View>
-      </View>
+        <Container>
+          <Card style={styles.section}>
+            <AppText variant="h2" color={tokens.palette.primary} style={styles.title}>Guardian Policy</AppText>
+            {policy ? (
+              <>
+                <AppText style={styles.text}>Threshold: {policy.threshold}</AppText>
+                <AppText style={styles.text}>Cooldown: {policy.cooldownHours}h</AppText>
+                <FlatList
+                  data={policy.guardians}
+                  keyExtractor={g => g.id}
+                  renderItem={({ item }) => (
+                    <View style={[styles.guardianItem, { flexDirection: 'row', justifyContent: 'space-between' }]}>
+                      <AppText>{item.label} • {item.contact}</AppText>
+                      <TouchableOpacity onPress={() => removeGuardian(item.id)}><AppText color={tokens.palette.warning}>Remove</AppText></TouchableOpacity>
+                    </View>
+                  )}
+                />
+              </>
+            ) : (
+              <AppText style={styles.text}>No policy configured</AppText>
+            )}
+            <View style={{ marginTop: 8 }}>
+              <AppText style={styles.text}>Threshold</AppText>
+              <TextInput value={threshold} onChangeText={setThreshold} style={styles.input} keyboardType="numeric" />
+              <AppText style={[styles.text, { marginTop: 8 }]}>Cooldown (hours)</AppText>
+              <TextInput value={cooldown} onChangeText={setCooldown} style={styles.input} keyboardType="numeric" />
+              <AppButton title="Save Policy" onPress={savePolicyBasics} style={styles.btnLike} />
+            </View>
+            <View style={{ marginTop: 12 }}>
+              <AppText style={styles.text}>Add Guardian</AppText>
+              <TextInput placeholder="Label" placeholderTextColor={CYBERPUNK_COLORS.textSecondary} style={styles.input} value={newGuardianLabel} onChangeText={setNewGuardianLabel} />
+              <TextInput placeholder="Contact (email/phone/deviceId)" placeholderTextColor={CYBERPUNK_COLORS.textSecondary} style={styles.input} value={newGuardianContact} onChangeText={setNewGuardianContact} />
+              <AppButton title="Add Guardian" onPress={addGuardian} style={styles.btnLike} />
+            </View>
+          </Card>
 
-      <View style={styles.section}>
-        <Text style={styles.title}>Recovery Request</Text>
-        {request ? (
-          <>
-            <Text style={styles.text}>ID: {request.id}</Text>
-            <Text style={styles.text}>Approvals: {request.approvals.length}</Text>
-            <Text style={styles.text}>Status: {request.status}</Text>
-            <Text style={styles.text}>{canFinalizeMsg}</Text>
-            <TouchableOpacity style={styles.btn} onPress={handleApproveMock}><Text style={styles.btnText}>Mock Approve Next Guardian</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.btn} onPress={handleFinalize}><Text style={styles.btnText}>Finalize Recovery</Text></TouchableOpacity>
-          </>
-        ) : (
-          <TouchableOpacity style={styles.btn} onPress={handleStart}><Text style={styles.btnText}>Start Recovery</Text></TouchableOpacity>
-        )}
-      </View>
+          <Card style={styles.section}>
+            <AppText variant="h2" color={tokens.palette.primary} style={styles.title}>Recovery Request</AppText>
+            {request ? (
+              <>
+                <AppText style={styles.text}>ID: {request.id}</AppText>
+                <AppText style={styles.text}>Approvals: {request.approvals.length}</AppText>
+                <AppText style={styles.text}>Status: {request.status}</AppText>
+                <AppText style={styles.text}>{canFinalizeMsg}</AppText>
+                <AppButton title="Mock Approve Next Guardian" onPress={handleApproveMock} style={styles.btnLike} />
+                <AppButton title="Finalize Recovery" onPress={handleFinalize} style={styles.btnLike} />
+              </>
+            ) : (
+              <AppButton title="Start Recovery" onPress={handleStart} style={styles.btnLike} />
+            )}
+          </Card>
+        </Container>
       </ScrollView>
     </LinearGradient>
   );
@@ -163,6 +170,7 @@ const styles = StyleSheet.create({
   btn: { backgroundColor: CYBERPUNK_COLORS.primary, padding: 12, borderRadius: 10, marginTop: 8 },
   btnText: { color: '#0a0e27', textAlign: 'center', fontWeight: '700' },
   input: { backgroundColor: CYBERPUNK_COLORS.surface, color: CYBERPUNK_COLORS.text, borderWidth: 1, borderColor: CYBERPUNK_COLORS.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, marginTop: 6 },
+  btnLike: { marginTop: 8 },
 });
 
 export default GuardianRecoveryScreen;

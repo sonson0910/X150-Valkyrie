@@ -12,6 +12,11 @@ import {
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppText } from '../components/ui/AppText';
+import { AppButton } from '../components/ui/AppButton';
+import { tokens } from '../theme/tokens';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 
@@ -46,6 +51,27 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
       generateNewMnemonic();
     }
   }, [step]);
+
+  // Khi ở bước 2: hiển thị transformed mnemonic (mobile) hoặc demo fake (web)
+  useEffect(() => {
+    if (step !== 2) return;
+    (async () => {
+      try {
+        if (typeof window !== 'undefined') {
+          // Web demo
+          generateFakeMnemonic();
+        } else if (originalMnemonic && userPassword) {
+          const transformed = await MnemonicTransformService.transformMnemonic(
+            originalMnemonic,
+            userPassword
+          );
+          setFakeMnemonic(transformed);
+        }
+      } catch (e) {
+        console.warn('Failed to prepare transformed mnemonic for display:', e);
+      }
+    })();
+  }, [step, originalMnemonic, userPassword]);
 
   const generateNewMnemonic = () => {
     console.log('Generating original mnemonic...');
@@ -124,21 +150,8 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
       console.log('Creating encrypted wallet...');
       setIsCreating(true);
       
-      // Skip encryption on web for demo purposes
-      if (typeof window !== 'undefined') {
-        console.log('Running on web, using demo mode');
-        // fakeMnemonic is already set in step 2, don't override it
-        
-        // Simulate wallet creation delay
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        console.log('Demo wallet created successfully');
-        setStep(3);
-        return;
-      }
-      
-      // Real encryption & transformed mnemonic for mobile
-      console.log('Running on mobile, using real encryption and transform');
+      // Luôn mã hóa & biến đổi mnemonic (kể cả web)
+      console.log('Encrypting and transforming mnemonic');
       const encrypted = await MnemonicEncryptionService.encryptMnemonic(
         originalMnemonic,
         userPassword
@@ -157,7 +170,7 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
       // Hiển thị mnemonic đã biến đổi (36 từ) thay vì mnemonic gốc
       setFakeMnemonic(transformed);
       
-      // Initialize wallet service
+      // Initialize wallet service từ mnemonic gốc (chỉ trong bộ nhớ)
       const walletService = CardanoWalletService.getInstance();
       await walletService.initializeFromMnemonic(originalMnemonic);
       
@@ -307,20 +320,18 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   const renderStep2 = () => {
-    console.log('Rendering step 2, fakeMnemonic:', fakeMnemonic);
-    console.log('fakeMnemonic length:', fakeMnemonic ? fakeMnemonic.length : 'undefined');
-    console.log('fakeMnemonic split:', fakeMnemonic ? fakeMnemonic.split(' ') : 'undefined');
-    
+    // Không hiển thị mnemonic gốc trực tiếp. Hiển thị transformed mnemonic sau khi mã hóa.
+    const wordsToDisplay = fakeMnemonic ? fakeMnemonic.split(' ') : [];
     return (
       <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
       <Text style={styles.stepTitle}>Your Recovery Phrase</Text>
       <Text style={styles.stepDescription}>
-        This is your wallet's recovery phrase. Write it down and store it securely. Anyone with this phrase can access your funds.
+        This is your wallet's recovery phrase. Write it down and store it securely. Do not share it with anyone.
       </Text>
 
         <View style={styles.mnemonicContainer}>
           <View style={styles.mnemonicGrid}>
-            {originalMnemonic && originalMnemonic.split(' ').map((word, index) => (
+            {wordsToDisplay.map((word, index) => (
               <View key={index} style={styles.mnemonicWord}>
                 <Text style={styles.mnemonicIndex}>{index + 1}</Text>
                 <Text style={styles.mnemonicText}>{word}</Text>
@@ -331,15 +342,9 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
 
         <View style={styles.warningContainer}>
           <Text style={styles.warningTitle}>⚠️ Important Security Notice</Text>
-          <Text style={styles.warningText}>
-            • Never share this phrase with anyone
-          </Text>
-          <Text style={styles.warningText}>
-            • Screenshots are unsafe — write it down and store offline
-          </Text>
-          <Text style={styles.warningText}>
-            • This phrase can restore your wallet and funds
-          </Text>
+          <Text style={styles.warningText}>• Never share this phrase with anyone</Text>
+          <Text style={styles.warningText}>• Screenshots are unsafe — write it down and store offline</Text>
+          <Text style={styles.warningText}>• Only your personal password can restore the original 24-word phrase inside Valkyrie</Text>
         </View>
       </Animated.View>
     );
@@ -370,40 +375,30 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Progress indicator */}
-        <View style={styles.progressContainer}>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${(step / 3) * 100}%` }]} />
+        <Container>
+          {/* Progress indicator */}
+          <View style={styles.progressContainer}>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: `${(step / 3) * 100}%` }]} />
+            </View>
+            <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.progressText}>Step {step} of 3</AppText>
           </View>
-          <Text style={styles.progressText}>Step {step} of 3</Text>
-        </View>
 
-        {/* Step content */}
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-        {step === 3 && renderStep3()}
+          {/* Step content */}
+          {step === 1 && renderStep1()}
+          {step === 2 && renderStep2()}
+          {step === 3 && renderStep3()}
 
-        {/* Action button */}
-        <TouchableOpacity
-          style={styles.nextButton}
-          onPress={handleNextStep}
-          disabled={isCreating}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={[CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent]}
-            style={styles.nextButtonGradient}
-          >
-            <Text style={styles.nextButtonText}>
-              {isCreating ? 'Creating...' : step === 3 ? 'START USING WALLET' : 'NEXT'}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
+          {/* Action button */}
+          <AppButton
+            title={isCreating ? 'Creating...' : step === 3 ? 'START USING WALLET' : 'NEXT'}
+            onPress={handleNextStep}
+            disabled={isCreating}
+            style={styles.nextButton}
+          />
+        </Container>
       </ScrollView>
     </LinearGradient>
   );

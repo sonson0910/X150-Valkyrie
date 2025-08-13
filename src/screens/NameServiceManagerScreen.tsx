@@ -2,6 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, FlatList, TextInput, Switch, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CYBERPUNK_COLORS } from '../constants';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppButton } from '../components/ui/AppButton';
+import { AppText } from '../components/ui/AppText';
+import { tokens } from '../theme/tokens';
 import { ConfigurationService } from '../services/ConfigurationService';
 import { AddressResolverService } from '../services/AddressResolverService';
 
@@ -32,12 +37,12 @@ const NameServiceManagerScreen: React.FC = () => {
   };
 
   return (
-    <LinearGradient colors={[CYBERPUNK_COLORS.background, '#1a1f3a']} style={styles.container}>
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <Text style={styles.title}>Name Service Manager</Text>
+        <AppText variant="h1" color={tokens.palette.primary} style={styles.title}>Name Service Manager</AppText>
 
         <View style={styles.section}>
-          <Text style={styles.subtitle}>Local Mapping</Text>
+          <AppText variant="h3" color={tokens.palette.accent} style={styles.subtitle}>Local Mapping</AppText>
           <View style={styles.row}>
             <TextInput
               placeholder="$handle"
@@ -54,35 +59,30 @@ const NameServiceManagerScreen: React.FC = () => {
               onChangeText={setNewAddress}
             />
           </View>
-          <TouchableOpacity
-            style={styles.btn}
-            onPress={async () => {
-              const key = (newHandle.startsWith('$') ? newHandle.slice(1) : newHandle).toLowerCase();
-              if (!key || !newAddress.startsWith('addr1')) { Alert.alert('Invalid', 'Enter $handle and bech32 address'); return; }
-              const next = { ...mapping, [key]: newAddress };
-              await save({ mapping: next });
-              setNewHandle(''); setNewAddress('');
-            }}
-          >
-            <Text style={styles.btnText}>Add Mapping</Text>
-          </TouchableOpacity>
+          <AppButton title="Add Mapping" onPress={async () => {
+            const key = (newHandle.startsWith('$') ? newHandle.slice(1) : newHandle).toLowerCase();
+            if (!key || !newAddress.startsWith('addr1')) { Alert.alert('Invalid', 'Enter $handle and bech32 address'); return; }
+            const next = { ...mapping, [key]: newAddress };
+            await save({ mapping: next });
+            setNewHandle(''); setNewAddress('');
+          }} style={styles.btnLike} />
           <FlatList
             data={Object.entries(mapping)}
             keyExtractor={([k]) => k}
             renderItem={({ item: [k, v] }) => (
               <View style={[styles.item, styles.rowBetween]}>
-                <Text style={styles.text}>${k} → {v}</Text>
+                <AppText>${k} → {v}</AppText>
                 <TouchableOpacity onPress={async () => {
                   const next = { ...mapping }; delete next[k]; await save({ mapping: next });
-                }}><Text style={[styles.text, { color: CYBERPUNK_COLORS.warning }]}>Remove</Text></TouchableOpacity>
+                }}><AppText color={tokens.palette.warning}>Remove</AppText></TouchableOpacity>
               </View>
             )}
-            ListEmptyComponent={<Text style={styles.text}>No entries</Text>}
+            ListEmptyComponent={<AppText>No entries</AppText>}
           />
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.subtitle}>Remote Resolvers</Text>
+          <AppText variant="h3" color={tokens.palette.accent} style={styles.subtitle}>Remote Resolvers</AppText>
           <View style={styles.row}>
             <TextInput
               placeholder="https://resolver.example.com/resolve"
@@ -91,38 +91,38 @@ const NameServiceManagerScreen: React.FC = () => {
               value={newResolver}
               onChangeText={setNewResolver}
             />
-            <TouchableOpacity style={[styles.btn, { marginLeft: 8 }]} onPress={async () => {
+            <AppButton title="Add" onPress={async () => {
               if (!newResolver.startsWith('http')) { Alert.alert('Invalid URL'); return; }
               const next = Array.from(new Set([...(resolvers || []), newResolver]));
               await save({ remoteResolvers: next }); setNewResolver('');
-            }}><Text style={styles.btnText}>Add</Text></TouchableOpacity>
+            }} style={[styles.btnLike, { marginLeft: 8 }]} />
           </View>
           <FlatList
             data={resolvers}
             keyExtractor={(u) => u}
             renderItem={({ item }) => (
               <View style={[styles.item, styles.rowBetween]}>
-                <Text style={styles.text}>{item}</Text>
+                <AppText>{item}</AppText>
                 <TouchableOpacity onPress={async () => {
                   const next = resolvers.filter(r => r !== item); await save({ remoteResolvers: next });
-                }}><Text style={[styles.text, { color: CYBERPUNK_COLORS.warning }]}>Remove</Text></TouchableOpacity>
+                }}><AppText color={tokens.palette.warning}>Remove</AppText></TouchableOpacity>
               </View>
             )}
-            ListEmptyComponent={<Text style={styles.text}>No resolver endpoints</Text>}
+            ListEmptyComponent={<AppText>No resolver endpoints</AppText>}
           />
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.subtitle}>ADA Handle</Text>
+          <AppText variant="h3" color={tokens.palette.accent} style={styles.subtitle}>ADA Handle</AppText>
           <View style={styles.rowBetween}>
-            <Text style={styles.text}>Enabled</Text>
+            <AppText>Enabled</AppText>
             <Switch
               value={enabled}
               onValueChange={async (val) => { setEnabled(val); await save({ adaHandle: { enabled: val, policyId } }); }}
               trackColor={{ false: CYBERPUNK_COLORS.border, true: CYBERPUNK_COLORS.primary }}
             />
           </View>
-          <Text style={[styles.text, { marginTop: 8 }]}>Policy ID</Text>
+          <AppText style={{ marginTop: 8 }}>Policy ID</AppText>
           <TextInput
             placeholder="56-hex policy id"
             placeholderTextColor={CYBERPUNK_COLORS.textSecondary}
@@ -131,15 +131,15 @@ const NameServiceManagerScreen: React.FC = () => {
             onChangeText={setPolicyId}
             autoCapitalize="none"
           />
-          <TouchableOpacity style={styles.btn} onPress={async () => {
+          <AppButton title="Save ADA Handle" onPress={async () => {
             if (policyId && policyId.length !== 56) { Alert.alert('Invalid policyId'); return; }
             await save({ adaHandle: { enabled, policyId } });
             Alert.alert('Saved', 'ADA Handle settings updated');
-          }}><Text style={styles.btnText}>Save ADA Handle</Text></TouchableOpacity>
-          <TouchableOpacity style={[styles.btn, { backgroundColor: CYBERPUNK_COLORS.accent }]} onPress={async () => {
+          }} style={styles.btnLike} />
+          <AppButton title="Clear Resolver Cache" variant="secondary" onPress={async () => {
             await AddressResolverService.getInstance().clearCache();
             Alert.alert('Cache cleared');
-          }}><Text style={styles.btnText}>Clear Resolver Cache</Text></TouchableOpacity>
+          }} style={[styles.btnLike, { marginTop: 8 }]} />
         </View>
       </ScrollView>
     </LinearGradient>

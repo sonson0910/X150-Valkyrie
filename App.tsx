@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
+import * as Font from 'expo-font';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+// If @expo-google-fonts/inter is not installed, fonts will still load-fail gracefully
+let Inter_400Regular: any, Inter_500Medium: any, Inter_600SemiBold: any, Inter_700Bold: any;
 import { View, Text, TouchableOpacity, Platform, StyleSheet } from 'react-native';
 
 // Import web polyfills for Cardano compatibility
@@ -10,6 +13,9 @@ import './src/polyfills/mime-buffer-fix';
 import './src/polyfills/cardano-web-fix';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ToastProvider } from '@contexts/ToastContext';
+import { NetworkService } from './src/services/NetworkService';
+import { ConfigurationService } from './src/services/ConfigurationService';
+import { WalletStateService } from './src/services/WalletStateService';
 
 import { RootStackParamList } from './src/types/navigation';
 import { ErrorHandler } from './src/services/ErrorHandler';
@@ -33,6 +39,7 @@ import PortfolioAnalyticsScreen from './src/screens/PortfolioAnalyticsScreen';
 import SubmitResultScreen from './src/screens/SubmitResultScreen';
 import GuardianRecoveryScreen from './src/screens/GuardianRecoveryScreen';
 import NameServiceManagerScreen from './src/screens/NameServiceManagerScreen';
+import MainTabs from './src/navigation/MainTabs';
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -82,11 +89,13 @@ class ErrorBoundary extends React.Component<
 
 export default function App() {
   const [isInitialized, setIsInitialized] = useState(false);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     console.log('App component mounted');
     initializeApp();
+    loadFonts();
   }, []);
 
   const initializeApp = async () => {
@@ -97,6 +106,13 @@ export default function App() {
       const errorHandler = ErrorHandler.getInstance();
       console.log('Error handler initialized');
       
+      // Initialize configuration and network (pinning, timeouts)
+      await ConfigurationService.getInstance().initialize();
+      await NetworkService.getInstance().initialize();
+
+      // Initialize wallet state
+      await WalletStateService.getInstance().initialize();
+
       // Initialize biometric service
       const biometricService = BiometricService.getInstance();
       const biometric = await biometricService.checkBiometricSupport();
@@ -112,6 +128,20 @@ export default function App() {
       setError(error instanceof Error ? error.message : 'Unknown error');
       // Continue without biometric
       setIsInitialized(true);
+    }
+  };
+
+  const loadFonts = async () => {
+    try {
+      await Font.loadAsync({
+        Inter_400: Inter_400Regular,
+        Inter_500: Inter_500Medium,
+        Inter_600: Inter_600SemiBold,
+        Inter_700: Inter_700Bold,
+      });
+      setFontsLoaded(true);
+    } catch (e) {
+      setFontsLoaded(true);
     }
   };
 
@@ -135,7 +165,7 @@ export default function App() {
     );
   }
 
-  if (!isInitialized) {
+  if (!isInitialized || !fontsLoaded) {
     return (
       <View style={styles.centeredContainer}>
         <Text style={styles.title}>Loading...</Text>
@@ -160,7 +190,7 @@ export default function App() {
             >
               <Stack.Screen name="Welcome" component={WelcomeScreen} />
               <Stack.Screen name="SetupWallet" component={SetupWalletScreen} />
-              <Stack.Screen name="WalletHome" component={WalletHomeScreen} />
+              <Stack.Screen name="WalletHome" component={MainTabs as any} />
               <Stack.Screen name="SendTransaction" component={SendTransactionScreen} />
               <Stack.Screen name="ReceiveScreen" component={ReceiveScreen} />
               <Stack.Screen name="TransactionHistory" component={TransactionHistoryScreen} />

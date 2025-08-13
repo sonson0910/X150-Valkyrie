@@ -15,6 +15,13 @@ export class OfflineTransactionService {
     private walletService: CardanoWalletService;
     private syncInterval?: NodeJS.Timeout;
     private ttlMonitorInterval?: NodeJS.Timeout;
+    // Rebuild backoff/capacity control
+    private lastRebuildAt: Map<string, number> = new Map();
+    private rebuildWindowStart: number = Date.now();
+    private rebuildCountInWindow: number = 0;
+    private static readonly REBUILD_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+    private static readonly REBUILD_COOLDOWN_MS = 15 * 60 * 1000; // 15 minutes
+    private static readonly REBUILD_MAX_PER_WINDOW = 10;
 
     constructor() {
         this.walletService = CardanoWalletService.getInstance();
@@ -412,12 +419,28 @@ export class OfflineTransactionService {
                 const latest = await api.getLatestBlock();
                 const currentSlot: number = latest?.slot || 0;
 
+                // Reset capacity window if elapsed
+                const now = Date.now();
+                if (now - this.rebuildWindowStart > OfflineTransactionService.REBUILD_WINDOW_MS) {
+                    this.rebuildWindowStart = now;
+                    this.rebuildCountInWindow = 0;
+                }
+
                 for (const tx of expiring) {
                     const ttl: number | undefined = tx.metadata?.ttl;
                     if (!ttl) continue;
                     // Nếu còn < 5 phút (~300 slots tuỳ epoch config), rebuild
                     if (ttl - currentSlot <= 300) {
                         try {
+                            // Capacity & cooldown checks
+                            if (this.rebuildCountInWindow >= OfflineTransactionService.REBUILD_MAX_PER_WINDOW) {
+                                console.warn('Rebuild capacity reached, skipping until next window');
+                                break;
+                            }
+                            const last = this.lastRebuildAt.get(tx.id) || 0;
+                            if (now - last < OfflineTransactionService.REBUILD_COOLDOWN_MS) {
+                                continue;
+                            }
                             // Giữ nguyên các tham số gốc
                             const rebuilt = await this.walletService.buildTransaction(
                                 tx.from,
@@ -436,6 +459,8 @@ export class OfflineTransactionService {
                             // Xoá bản cũ
                             await this.removeFromOfflineQueue(tx.id);
                             console.log('Rebuilt expiring offline tx:', tx.id, '->', rebuilt.id);
+                            this.lastRebuildAt.set(rebuilt.id, now);
+                            this.rebuildCountInWindow += 1;
                         } catch (rebuildErr) {
                             console.warn('Failed to rebuild expiring tx', tx.id, rebuildErr);
                         }
@@ -444,7 +469,7 @@ export class OfflineTransactionService {
             } catch (e) {
                 // ignore monitor errors
             }
-        }, interval);
+        }, interval + Math.floor(Math.random() * 3000));
     }
 
     stopTTLMonitor(): void {

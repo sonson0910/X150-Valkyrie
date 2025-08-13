@@ -24,7 +24,12 @@ import {
   StakingPosition,
   LiquidityPosition
 } from '../services/DeFiStakingService';
-import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '../components/index';
+import { LoadingSpinner } from '../components/index';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppButton } from '../components/ui/AppButton';
+import { AppText } from '../components/ui/AppText';
+import { tokens } from '../theme/tokens';
 
 type DeFiStakingScreenNavigationProp = StackNavigationProp<RootStackParamList, 'DeFiStaking'>;
 
@@ -173,7 +178,7 @@ const DeFiStakingScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   const renderStakingPool = ({ item: pool }: { item: StakingPool }) => (
-    <CyberpunkCard key={pool.id} style={styles.poolCard}>
+    <Card key={pool.id} style={styles.poolCard}>
       <View style={styles.poolHeader}>
         <View style={styles.poolInfo}>
           <Text style={styles.poolName}>{pool.name}</Text>
@@ -203,19 +208,12 @@ const DeFiStakingScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       </View>
 
-      <CyberpunkButton
-        title="Stake to Pool"
-        onPress={() => {
-          setSelectedPool(pool);
-          setShowStakeModal(true);
-        }}
-        style={styles.stakeButton}
-      />
-    </CyberpunkCard>
+      <AppButton title="Stake to Pool" onPress={() => { setSelectedPool(pool); setShowStakeModal(true); }} style={styles.stakeButton} />
+    </Card>
   );
 
   const renderLiquidityPool = ({ item: pool }: { item: LiquidityPool }) => (
-    <CyberpunkCard key={pool.id} style={styles.poolCard}>
+    <Card key={pool.id} style={styles.poolCard}>
       <View style={styles.poolHeader}>
         <View style={styles.poolInfo}>
           <Text style={styles.poolName}>{pool.name}</Text>
@@ -250,19 +248,12 @@ const DeFiStakingScreen: React.FC<Props> = ({ navigation }) => {
         </View>
       </View>
 
-      <CyberpunkButton
-        title="Add Liquidity"
-        onPress={() => {
-          setSelectedLiquidityPool(pool);
-          setShowLiquidityModal(true);
-        }}
-        style={styles.stakeButton}
-      />
-    </CyberpunkCard>
+      <AppButton title="Add Liquidity" onPress={() => { setSelectedLiquidityPool(pool); setShowLiquidityModal(true); }} style={styles.stakeButton} />
+    </Card>
   );
 
   const renderGovernanceProposal = ({ item: proposal }: { item: GovernanceProposal }) => (
-    <CyberpunkCard key={proposal.id} style={styles.proposalCard}>
+    <Card key={proposal.id} style={styles.proposalCard}>
       <View style={styles.proposalHeader}>
         <Text style={styles.proposalTitle}>{proposal.title}</Text>
         <View style={[styles.statusBadge, { backgroundColor: getProposalStatusColor(proposal.status) }]}>
@@ -298,17 +289,9 @@ const DeFiStakingScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       {proposal.status === 'active' && (
-        <CyberpunkButton
-          title="Vote Now"
-          onPress={() => {
-            setSelectedProposal(proposal);
-            setShowVoteModal(true);
-          }}
-          variant="outline"
-          style={styles.voteButton}
-        />
+        <AppButton title="Vote Now" variant="secondary" onPress={() => { setSelectedProposal(proposal); setShowVoteModal(true); }} style={styles.voteButton} />
       )}
-    </CyberpunkCard>
+    </Card>
   );
 
   const getProposalStatusColor = (status: string): string => {
@@ -390,46 +373,26 @@ const DeFiStakingScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>DeFi & Staking</Text>
-          <Text style={styles.subtitle}>
-            Earn rewards through staking and liquidity provision
-          </Text>
+          <AppText variant="h1" color={tokens.palette.primary} style={styles.title}>DeFi & Staking</AppText>
+          <AppText variant="body" color={tokens.palette.textSecondary} style={styles.subtitle}>Earn rewards through staking and liquidity provision</AppText>
         </View>
 
         {/* Tab Navigation */}
         <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'staking' && styles.activeTab]}
-            onPress={() => setActiveTab('staking')}
-          >
-            <Text style={[styles.tabText, activeTab === 'staking' && styles.activeTabText]}>
-              🏗️ Staking
-            </Text>
+          <TouchableOpacity style={[styles.tab, activeTab === 'staking' && styles.activeTab]} onPress={() => setActiveTab('staking')}>
+            <Text style={[styles.tabText, activeTab === 'staking' && styles.activeTabText]}>🏗️ Staking</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'liquidity' && styles.activeTab]}
-            onPress={() => setActiveTab('liquidity')}
-          >
-            <Text style={[styles.tabText, activeTab === 'liquidity' && styles.activeTabText]}>
-              💧 Liquidity
-            </Text>
+          <TouchableOpacity style={[styles.tab, activeTab === 'liquidity' && styles.activeTab]} onPress={() => setActiveTab('liquidity')}>
+            <Text style={[styles.tabText, activeTab === 'liquidity' && styles.activeTabText]}>💧 Liquidity</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'governance' && styles.activeTab]}
-            onPress={() => setActiveTab('governance')}
-          >
-            <Text style={[styles.tabText, activeTab === 'governance' && styles.activeTabText]}>
-              🗳️ Governance
-            </Text>
+          <TouchableOpacity style={[styles.tab, activeTab === 'governance' && styles.activeTab]} onPress={() => setActiveTab('governance')}>
+            <Text style={[styles.tabText, activeTab === 'governance' && styles.activeTabText]}>🗳️ Governance</Text>
           </TouchableOpacity>
         </View>
 
@@ -465,17 +428,8 @@ const DeFiStakingScreen: React.FC<Props> = ({ navigation }) => {
             />
 
             <View style={styles.modalActions}>
-              <CyberpunkButton
-                title="Cancel"
-                onPress={() => setShowStakeModal(false)}
-                variant="outline"
-                style={styles.modalButton}
-              />
-              <CyberpunkButton
-                title="Stake"
-                onPress={handleStake}
-                style={styles.modalButton}
-              />
+              <AppButton title="Cancel" variant="ghost" onPress={() => setShowStakeModal(false)} style={styles.modalButton} />
+              <AppButton title="Stake" onPress={handleStake} style={styles.modalButton} />
             </View>
           </View>
         </View>
@@ -518,17 +472,8 @@ const DeFiStakingScreen: React.FC<Props> = ({ navigation }) => {
             />
 
             <View style={styles.modalActions}>
-              <CyberpunkButton
-                title="Cancel"
-                onPress={() => setShowLiquidityModal(false)}
-                variant="outline"
-                style={styles.modalButton}
-              />
-              <CyberpunkButton
-                title="Add Liquidity"
-                onPress={handleAddLiquidity}
-                style={styles.modalButton}
-              />
+              <AppButton title="Cancel" variant="ghost" onPress={() => setShowLiquidityModal(false)} style={styles.modalButton} />
+              <AppButton title="Add Liquidity" onPress={handleAddLiquidity} style={styles.modalButton} />
             </View>
           </View>
         </View>
@@ -591,17 +536,8 @@ const DeFiStakingScreen: React.FC<Props> = ({ navigation }) => {
             />
 
             <View style={styles.modalActions}>
-              <CyberpunkButton
-                title="Cancel"
-                onPress={() => setShowVoteModal(false)}
-                variant="outline"
-                style={styles.modalButton}
-              />
-              <CyberpunkButton
-                title="Submit Vote"
-                onPress={handleVote}
-                style={styles.modalButton}
-              />
+              <AppButton title="Cancel" variant="ghost" onPress={() => setShowVoteModal(false)} style={styles.modalButton} />
+              <AppButton title="Submit Vote" onPress={handleVote} style={styles.modalButton} />
             </View>
           </View>
         </View>

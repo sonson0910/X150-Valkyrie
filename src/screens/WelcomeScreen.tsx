@@ -10,6 +10,11 @@ import {
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppText } from '../components/ui/AppText';
+import { AppButton } from '../components/ui/AppButton';
+import { tokens } from '../theme/tokens';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
@@ -214,10 +219,7 @@ const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a', '#0a0e27']}
-      style={styles.container}
-    >
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt, tokens.palette.background]} style={styles.container}>
       {/* Animated background elements */}
       <Animated.View
         style={[
@@ -247,64 +249,34 @@ const WelcomeScreen: React.FC<Props> = ({ navigation }) => {
       >
         {/* Logo and title */}
         <View style={styles.header}>
-          <Text style={styles.logo}>⚡</Text>
-          <Text style={styles.title}>VALKYRIE</Text>
-          <Text style={styles.subtitle}>Advanced Cardano Wallet</Text>
+          <AppText style={styles.logo}>⚡</AppText>
+          <AppText variant="h1" color={tokens.palette.primary} style={styles.title}>VALKYRIE</AppText>
+          <AppText variant="body" color={tokens.palette.textSecondary} style={styles.subtitle}>Advanced Cardano Wallet</AppText>
         </View>
 
         {/* Features list */}
         <View style={styles.features}>
-          <FeatureItem
-            icon="🔒"
-            title="Encrypted Mnemonic"
-            description="Your seed phrase is encrypted with your personal password"
-          />
-          <FeatureItem
-            icon="👆"
-            title="One-Touch Payments"
-            description="Biometric authentication for quick transactions"
-          />
-          <FeatureItem
-            icon="📡"
-            title="Offline Transactions"
-            description="Sign transactions offline and transfer via Bluetooth"
-          />
+          <FeatureItem icon="🔒" title="Encrypted Mnemonic" description="Your seed phrase is encrypted with your personal password" />
+          <FeatureItem icon="👆" title="One-Touch Payments" description="Biometric authentication for quick transactions" />
+          <FeatureItem icon="📡" title="Offline Transactions" description="Sign transactions offline and transfer via Bluetooth" />
         </View>
 
         {/* Action buttons */}
         <View style={styles.buttonContainer}>
           {hasExistingWallet ? (
-            <CyberpunkButton
-              title="UNLOCK WALLET"
-              onPress={handleUnlockWallet}
-              primary
-              icon="🔓"
-            />
+            <AppButton title="UNLOCK WALLET" onPress={handleUnlockWallet} />
           ) : (
             <>
-              <CyberpunkButton
-                title="CREATE WALLET"
-                onPress={handleCreateWallet}
-                primary
-                icon="⚡"
-              />
-              <CyberpunkButton
-                title="RESTORE WALLET"
-                onPress={handleRestoreWallet}
-                icon="🔄"
-              />
+              <AppButton title="CREATE WALLET" onPress={handleCreateWallet} style={{ marginBottom: 12 }} />
+              <AppButton title="RESTORE WALLET" onPress={handleRestoreWallet} variant="secondary" />
             </>
           )}
         </View>
 
         {/* Security notice */}
         <View style={styles.notice}>
-          <Text style={styles.noticeText}>
-            🛡️ Your wallet uses military-grade encryption
-          </Text>
-          <Text style={styles.noticeSubtext}>
-            Only you can access your funds with your personal password
-          </Text>
+          <AppText color={tokens.palette.success} weight="600" style={styles.noticeText}>🛡️ Your wallet uses military-grade encryption</AppText>
+          <AppText variant="caption" color={tokens.palette.textSecondary} style={styles.noticeSubtext}>Only you can access your funds with your personal password</AppText>
         </View>
       </Animated.View>
     </LinearGradient>

@@ -96,7 +96,38 @@ jest.mock('bip39', () => ({
 }));
 
 // Mock cardano-serialization-lib (virtual stub) to avoid requiring native/browser binaries in Jest
-jest.mock('@emurgo/cardano-serialization-lib-browser', () => ({}), { virtual: true });
+jest.mock('@emurgo/cardano-serialization-lib-browser', () => ({
+    Address: { from_bech32: jest.fn(() => ({})) },
+    BaseAddress: { new: jest.fn(() => ({ to_address: () => ({ to_bech32: () => 'addr1...' }) })) },
+    StakeCredential: { from_keyhash: jest.fn(() => ({})) },
+    Bip32PrivateKey: { from_bip39_entropy: jest.fn(() => ({
+        derive: jest.fn(() => ({
+            derive: jest.fn(() => ({
+                to_public: jest.fn(() => ({ to_raw_key: () => ({ hash: () => ({}) }) }))
+            }))
+        }))
+    })) },
+    TransactionBuilder: { new: jest.fn(() => ({ add_input: jest.fn(), add_output: jest.fn(), add_change_if_needed: jest.fn(), build: jest.fn(() => ({})), min_fee: jest.fn(() => ({ to_str: () => '200000' })) })) },
+    TransactionOutput: { new: jest.fn(() => ({})) },
+    Value: { new: jest.fn(() => ({ set_multiasset: jest.fn() })) },
+    BigNum: { from_str: jest.fn((s) => ({ to_str: () => String(s) })) },
+    LinearFee: { new: jest.fn(() => ({})) },
+    TransactionBuilderConfigBuilder: { new: jest.fn(() => ({ fee_algo: jest.fn(() => ({ pool_deposit: jest.fn(() => ({ key_deposit: jest.fn(() => ({ coins_per_utxo_byte: jest.fn(() => ({ max_value_size: jest.fn(() => ({ max_tx_size: jest.fn(() => ({ build: jest.fn(() => ({})) })) })) })) })) })) })) })) },
+    TransactionInput: { new: jest.fn(() => ({})) },
+    TransactionWitnessSet: { new: jest.fn(() => ({ set_vkeys: jest.fn() })) },
+    TransactionHash: { from_bytes: jest.fn(() => ({})) },
+    Vkeywitness: { new: jest.fn(() => ({})) },
+    Vkey: { new: jest.fn(() => ({})) },
+    Vkeywitnesses: { new: jest.fn(() => ({ add: jest.fn() })) },
+    Transaction: { new: jest.fn(() => ({ to_bytes: () => new Uint8Array([1,2,3]) })) },
+    MultiAsset: { new: jest.fn(() => ({ insert: jest.fn() })) },
+    Assets: { new: jest.fn(() => ({ insert: jest.fn() })) },
+    AssetName: { new: jest.fn(() => ({})) },
+    ScriptHash: { from_bytes: jest.fn(() => ({})) },
+    hash_transaction: jest.fn(() => ({ to_bytes: () => new Uint8Array([1,2,3]) })),
+    min_ada_required: jest.fn(() => ({ to_str: () => '1000000' })),
+    RewardAddress: { new: jest.fn(() => ({ to_address: () => ({ to_bech32: () => 'stake1u...' }) })) },
+}), { virtual: true });
 
 // Global test utilities
 global.console = {

@@ -77,7 +77,7 @@ export class AddressResolverService {
             for (const endpoint of resolvers) {
                 try {
                     const url = `${endpoint}${endpoint.includes('?') ? '&' : '?'}handle=${encodeURIComponent(name)}&network=${network}`;
-                    const resp = await fetch(url);
+                    const resp = await fetch(url, { method: 'GET' });
                     if (!resp.ok) continue;
                     const data = await resp.json().catch(() => ({} as any));
                     const candidate = data?.address || data?.result?.address || data?.data?.address;

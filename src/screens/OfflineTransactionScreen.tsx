@@ -10,6 +10,11 @@ import {
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppButton } from '../components/ui/AppButton';
+import { AppText } from '../components/ui/AppText';
+import { tokens } from '../theme/tokens';
 import * as Haptics from 'expo-haptics';
 
 import { RootStackParamList } from '../types/navigation';
@@ -119,7 +124,7 @@ const OfflineTransactionScreen: React.FC<Props> = ({ navigation }) => {
 
   const handleShowQRForLatest = async () => {
     try {
-      const latest = offlineService.getOfflineQueue().find(tx => tx.signedTx);
+      const latest = offlineService.getOfflineQueue().find(tx => !!tx.signedTx);
       if (!latest) {
         Alert.alert('QR Export', 'No offline signed transactions.');
         return;
@@ -176,120 +181,85 @@ const OfflineTransactionScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Bluetooth Status */}
-        <View style={styles.statusCard}>
-          <Text style={styles.statusTitle}>Bluetooth Status</Text>
-          <View style={styles.statusRow}>
-            <Text style={styles.statusLabel}>Enabled:</Text>
-            <Text style={[styles.statusValue, { color: isBluetoothEnabled ? CYBERPUNK_COLORS.success : CYBERPUNK_COLORS.error }]}>
-              {isBluetoothEnabled ? 'Yes' : 'No'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Merchant Mode */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Merchant Mode</Text>
-          <Text style={styles.cardDescription}>
-            Accept payments from customers via Bluetooth when offline
-          </Text>
-          
-          <View style={styles.switchRow}>
-            <Text style={styles.switchLabel}>Enable Merchant Mode</Text>
-            <Switch
-              value={isMerchantMode}
-              onValueChange={handleToggleMerchantMode}
-              trackColor={{ false: CYBERPUNK_COLORS.border, true: CYBERPUNK_COLORS.primary }}
-              thumbColor={CYBERPUNK_COLORS.text}
-            />
-          </View>
-
-          {isMerchantMode && (
-            <View style={styles.merchantInfo}>
-              <Text style={styles.merchantInfoText}>
-                🟢 Broadcasting as merchant - Customers can now send payments
-              </Text>
+        <Container>
+          {/* Bluetooth Status */}
+          <Card style={styles.statusCard}>
+            <AppText variant="h3" style={styles.statusTitle}>Bluetooth Status</AppText>
+            <View style={styles.statusRow}>
+              <AppText color={tokens.palette.textSecondary}>Enabled:</AppText>
+              <AppText color={isBluetoothEnabled ? tokens.palette.success : tokens.palette.danger}>{isBluetoothEnabled ? 'Yes' : 'No'}</AppText>
             </View>
-          )}
-        </View>
+          </Card>
 
-        {/* Nearby Merchants */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Nearby Merchants</Text>
-            <TouchableOpacity
-              style={styles.scanButton}
-              onPress={handleScanMerchants}
-              disabled={isScanning}
-            >
-              <Text style={styles.scanButtonText}>
-                {isScanning ? 'Scanning...' : 'Scan'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {nearbyMerchants.length > 0 ? (
-            nearbyMerchants.map((merchant) => (
-              <MerchantItem key={merchant.id} merchant={merchant} />
-            ))
-          ) : (
-            <Text style={styles.emptyText}>No merchants found nearby</Text>
-          )}
-
-          <TouchableOpacity style={[styles.scanButton, { marginTop: 12 }]} onPress={handleStartScan}>
-            <Text style={styles.scanButtonText}>Scan QR (Import)</Text>
-          </TouchableOpacity>
-          {scanMode && (
-            <View style={{ marginTop: 12 }}>
-              <QRCodeScanner onScan={handleScanQrData} onClose={() => setScanMode(false)} />
+          {/* Merchant Mode */}
+          <Card>
+            <AppText variant="h3" style={styles.cardTitle}>Merchant Mode</AppText>
+            <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.cardDescription}>Accept payments from customers via Bluetooth when offline</AppText>
+            <View style={styles.switchRow}>
+              <AppText>Enable Merchant Mode</AppText>
+              <Switch value={isMerchantMode} onValueChange={handleToggleMerchantMode} trackColor={{ false: tokens.palette.border, true: tokens.palette.primary }} thumbColor={tokens.palette.text} />
             </View>
-          )}
-        </View>
+            {isMerchantMode && (
+              <View style={styles.merchantInfo}>
+                <AppText color={tokens.palette.success}>🟢 Broadcasting as merchant - Customers can now send payments</AppText>
+              </View>
+            )}
+          </Card>
 
-        {/* Offline Queue */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>Offline Queue ({offlineQueue.length})</Text>
-            <TouchableOpacity
-              style={styles.syncButton}
-              onPress={handleSyncOfflineTransactions}
-            >
-              <Text style={styles.syncButtonText}>Sync</Text>
-            </TouchableOpacity>
-          </View>
-
-          {offlineQueue.length > 0 ? (
-            offlineQueue.map((tx) => (
-              <OfflineTransactionItem key={tx.id} transaction={tx} />
-            ))
-          ) : (
-            <Text style={styles.emptyText}>No offline transactions</Text>
-          )}
-
-          {offlineQueue.length > 0 && (
-            <TouchableOpacity style={[styles.syncButton, { marginTop: 12 }]} onPress={handleShowQRForLatest}>
-              <Text style={styles.syncButtonText}>Show QR for Latest</Text>
-            </TouchableOpacity>
-          )}
-          {qrPages.length > 0 && (
-            <View style={{ alignItems: 'center', marginTop: 12 }}>
-              <Text style={{ color: CYBERPUNK_COLORS.text, marginBottom: 8 }}>QR Pages ({qrPages.length})</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {qrPages.map((p, i) => (
-                  <View key={`qr_${i}`} style={{ marginRight: 12, alignItems: 'center' }}>
-                    <QRCode value={p} size={140} backgroundColor="transparent" color={CYBERPUNK_COLORS.text} />
-                    <Text style={{ color: CYBERPUNK_COLORS.textSecondary, marginTop: 6 }}>Page {i + 1}</Text>
-                  </View>
-                ))}
-              </ScrollView>
+          {/* Nearby Merchants */}
+          <Card>
+            <View style={styles.cardHeader}>
+              <AppText variant="h3" style={styles.cardTitle}>Nearby Merchants</AppText>
+              <AppButton title={isScanning ? 'Scanning...' : 'Scan'} onPress={handleScanMerchants} disabled={isScanning} style={{ width: 120 }} />
             </View>
-          )}
-        </View>
+            {nearbyMerchants.length > 0 ? (
+              nearbyMerchants.map((merchant) => (
+                <MerchantItem key={merchant.id} merchant={merchant} />
+              ))
+            ) : (
+              <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.emptyText}>No merchants found nearby</AppText>
+            )}
+            <AppButton title="Scan QR (Import)" variant="secondary" onPress={handleStartScan} style={{ marginTop: 12 }} />
+            {scanMode && (
+              <View style={{ marginTop: 12 }}>
+                <QRCodeScanner onScan={handleScanQrData} onClose={() => setScanMode(false)} />
+              </View>
+            )}
+          </Card>
+
+          {/* Offline Queue */}
+          <Card>
+            <View style={styles.cardHeader}>
+              <AppText variant="h3" style={styles.cardTitle}>Offline Queue ({offlineQueue.length})</AppText>
+              <AppButton title="Sync" variant="secondary" onPress={handleSyncOfflineTransactions} style={{ width: 120 }} />
+            </View>
+            {offlineQueue.length > 0 ? (
+              offlineQueue.map((tx) => (
+                <OfflineTransactionItem key={tx.id} transaction={tx} />
+              ))
+            ) : (
+              <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.emptyText}>No offline transactions</AppText>
+            )}
+            {offlineQueue.length > 0 && (
+              <AppButton title="Show QR for Latest" onPress={handleShowQRForLatest} style={{ marginTop: 12 }} />
+            )}
+            {qrPages.length > 0 && (
+              <View style={{ alignItems: 'center', marginTop: 12 }}>
+                <AppText variant="body2" color={tokens.palette.textSecondary} style={{ marginBottom: 8 }}>QR Pages ({qrPages.length})</AppText>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  {qrPages.map((p, i) => (
+                    <View key={`qr_${i}`} style={{ marginRight: 12, alignItems: 'center' }}>
+                      <QRCode value={p} size={140} backgroundColor="transparent" color={tokens.palette.text} />
+                      <AppText variant="caption" color={tokens.palette.textSecondary} style={{ marginTop: 6 }}>Page {i + 1}</AppText>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </Card>
+        </Container>
       </ScrollView>
     </LinearGradient>
   );

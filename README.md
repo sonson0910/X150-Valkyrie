@@ -77,6 +77,29 @@ npm start
 yarn start
 ```
 
+### Build với EAS
+```bash
+npx expo install expo-dev-client
+npx eas build --platform android --profile production
+npx eas build --platform ios --profile production
+```
+
+### Cấu hình SSL Pinning (Native)
+1) Thêm chứng chỉ vào thư mục `certs/` ở project root, đặt tên theo alias (ví dụ `blockfrost.cer`).
+2) `app.json` đã khai báo plugin copy cert: `plugins: [["./plugins/with-ssl-pinning-certs", { "certs": ["blockfrost"] }]]`
+3) Đảm bảo `CertificatePinningService` có `aliases` trùng alias (ví dụ `'blockfrost'`).
+4) Build bằng EAS, pinning sẽ khả dụng ở production.
+
+### Secrets & Runtime Config
+- Blockfrost API Key: set `BLOCKFROST_API_KEY` (EAS secrets) hoặc `extra.blockfrostApiKey` trong `app.json`.
+- Sentry DSN: set `SENTRY_DSN` (EAS secrets) để bật gửi lỗi production.
+
+Thiết lập EAS secrets ví dụ:
+```bash
+eas secret:create --name BLOCKFROST_API_KEY --value "bf1...your_project_id"
+eas secret:create --name SENTRY_DSN --value "https://<key>@sentry.io/<project>"
+```
+
 ### Bước 3: Chọn platform
 - Ấn `i` để mở iOS simulator
 - Ấn `a` để mở Android emulator
@@ -145,7 +168,7 @@ yarn test:coverage
 
 ## Roadmap 🗺️
 
-### Phase 1 (Hoàn thành 100% - IMPLEMENT THỰC TẾ VỚI BLOCKFROST API)
+### Phase 1 (Triển khai thực tế - Blockfrost API)
 - ✅ Core wallet functionality
 - ✅ Mnemonic encryption
 - ✅ Biometric authentication  
@@ -158,7 +181,7 @@ yarn test:coverage
 - ✅ Test suite with 70%+ coverage
 - ✅ Event-driven architecture
 - ✅ Performance monitoring
-- ✅ Certificate pinning implementation
+- ✅ Certificate pinning wiring (native lib khuyến nghị: react-native-ssl-pinning). Cần cấu hình fingerprints thật ở môi trường production
 - ✅ AsyncStorage integration
 - ✅ Centralized error management
 - ✅ Real transaction signing
@@ -233,4 +256,7 @@ MIT License - xem file [LICENSE](LICENSE) để biết thêm chi tiết.
 
 ---
 
-**Lưu ý**: Đây là phần mềm thử nghiệm. Vui lòng không sử dụng với số tiền lớn trên mainnet. Hãy test kỹ trên testnet trước khi sử dụng thực tế.
+**Lưu ý**:
+- Cần cấu hình Blockfrost API key qua cấu hình runtime/Secrets.
+- Cần cấu hình SSL pinning fingerprints thật trên native (iOS/Android) để bật pinning ở production.
+- Đây là phần mềm thử nghiệm. Vui lòng không sử dụng với số tiền lớn trên mainnet. Hãy test kỹ trên testnet trước khi sử dụng thực tế.

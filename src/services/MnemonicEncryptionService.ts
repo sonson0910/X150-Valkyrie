@@ -71,8 +71,9 @@ export class MnemonicEncryptionService {
         userPassword: string
     ): Promise<string> {
         try {
-            // Tạo key từ password và salt
-            const key = CryptoJS.PBKDF2(userPassword, encryptedData.salt, {
+            // Parse salt/iv từ hex và tạo key từ password và salt
+            const saltWA = CryptoJS.enc.Hex.parse(encryptedData.salt);
+            const key = CryptoJS.PBKDF2(userPassword, saltWA, {
                 keySize: encryptedData.keySize / 32,
                 iterations: encryptedData.iterations
             });

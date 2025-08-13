@@ -135,7 +135,7 @@ export class BiometricService {
     /**
      * Quick Pay với sinh trắc học
      */
-    async authenticateQuickPay(amount: string, quickPayLimit: string): Promise<{
+    async authenticateQuickPay(amountLovelace: string, quickPayLimitLovelace: string): Promise<{
         success: boolean;
         requireFullAuth: boolean;
         error?: string;
@@ -144,23 +144,23 @@ export class BiometricService {
             // Reset daily spent if day changed
             this.resetDailySpentIfNewDay();
 
-            const amountNum = parseFloat(amount);
-            const perTxLimit = parseFloat(this.config.quickPayPerTxLimit || this.config.quickPayLimit || '0');
-            const dailyCap = parseFloat(this.config.quickPayDailyCap || '0');
-            const dailySpent = parseFloat(this.config.quickPayDailySpent?.amount || '0');
+            const amount = BigInt(amountLovelace);
+            const perTxLimit = BigInt(this.config.quickPayPerTxLimit || this.config.quickPayLimit || '0');
+            const dailyCap = BigInt(this.config.quickPayDailyCap || '0');
+            const dailySpent = BigInt(this.config.quickPayDailySpent?.amount || '0');
 
-            if (perTxLimit > 0 && amountNum > perTxLimit) {
+            if (perTxLimit > 0n && amount > perTxLimit) {
                 return { success: false, requireFullAuth: true, error: 'Amount exceeds per-transaction limit' };
             }
-            if (dailyCap > 0 && (dailySpent + amountNum) > dailyCap) {
+            if (dailyCap > 0n && (dailySpent + amount) > dailyCap) {
                 return { success: false, requireFullAuth: true, error: 'Daily quick pay cap reached' };
             }
 
             // Quick biometric prompt
-            const result = await this.authenticateWithBiometric(`Quick Pay ${amount} ADA`);
+            const result = await this.authenticateWithBiometric(`Quick Pay`);
             if (result.success) {
-                // Accumulate daily spent
-                this.incrementDailySpent(amountNum);
+                // Accumulate daily spent (lovelace)
+                this.incrementDailySpent(amount);
             }
             return { ...result, requireFullAuth: false };
         } catch (error) {
@@ -204,11 +204,11 @@ export class BiometricService {
         }
     }
 
-    private incrementDailySpent(amountAda: number): void {
+    private incrementDailySpent(amountLovelace: bigint): void {
         this.resetDailySpentIfNewDay();
-        const current = parseFloat(this.config.quickPayDailySpent?.amount || '0');
-        const next = current + amountAda;
-        this.config.quickPayDailySpent = { date: new Date().toISOString().slice(0, 10), amount: String(next) };
+        const current = BigInt(this.config.quickPayDailySpent?.amount || '0');
+        const next = current + amountLovelace;
+        this.config.quickPayDailySpent = { date: new Date().toISOString().slice(0, 10), amount: next.toString() };
         this.saveBiometricConfig();
     }
 

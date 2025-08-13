@@ -77,11 +77,16 @@ export class SecureTransferService {
             );
             return { nonce, ciphertext: ct };
         }
-        // Fallback XOR (weak, only for dev)
-        const nonce = crypto.getRandomValues ? crypto.getRandomValues(new Uint8Array(12)) : new Uint8Array(12);
-        const out = new Uint8Array(plaintext.length);
-        for (let i = 0; i < plaintext.length; i++) out[i] = plaintext[i] ^ key[i % key.length];
-        return { nonce, ciphertext: out };
+        // Không cho phép fallback yếu ở production
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+            // Fallback XOR chỉ phục vụ dev để demo luồng, cảnh báo rõ ràng
+            console.warn('Using insecure XOR fallback encryption in development mode');
+            const nonce = crypto.getRandomValues ? crypto.getRandomValues(new Uint8Array(12)) : new Uint8Array(12);
+            const out = new Uint8Array(plaintext.length);
+            for (let i = 0; i < plaintext.length; i++) out[i] = plaintext[i] ^ key[i % key.length];
+            return { nonce, ciphertext: out };
+        }
+        throw new Error('Secure encryption unavailable on this platform');
     }
 
     async decrypt(ciphertext: Uint8Array, key: Uint8Array, nonce: Uint8Array): Promise<Uint8Array> {
@@ -98,9 +103,13 @@ export class SecureTransferService {
             );
             return pt;
         }
-        const out = new Uint8Array(ciphertext.length);
-        for (let i = 0; i < ciphertext.length; i++) out[i] = ciphertext[i] ^ key[i % key.length];
-        return out;
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+            console.warn('Using insecure XOR fallback decryption in development mode');
+            const out = new Uint8Array(ciphertext.length);
+            for (let i = 0; i < ciphertext.length; i++) out[i] = ciphertext[i] ^ key[i % key.length];
+            return out;
+        }
+        throw new Error('Secure decryption unavailable on this platform');
     }
 
     toHex(u8: Uint8Array): string {

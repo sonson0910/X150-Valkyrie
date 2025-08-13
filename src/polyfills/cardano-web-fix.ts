@@ -74,20 +74,7 @@ if (typeof window !== 'undefined') {
     }, 1000);
 }
 
-// Fix for MIME Buffer error specifically
-if (typeof window !== 'undefined') {
-    // Override console.error to catch MIME Buffer errors
-    const originalConsoleError = console.error;
-    console.error = function (...args: any[]) {
-        const message = args.join(' ');
-        if (message.includes('Could not find MIME for Buffer')) {
-            console.warn('MIME Buffer error caught and suppressed:', message);
-            return;
-        }
-        originalConsoleError.apply(console, args);
-    };
-    console.log('Console error override applied');
-}
+// Không override console.error để tránh che giấu lỗi thực tế
 
 console.log('Cardano web fix loaded successfully');
 

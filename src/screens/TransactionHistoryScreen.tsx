@@ -1,13 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  RefreshControl,
-  Dimensions,
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Dimensions } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -15,6 +7,11 @@ import * as Haptics from 'expo-haptics';
 import { RootStackParamList } from '../types/navigation';
 import { useFocusEffect } from '@react-navigation/native';
 import { CYBERPUNK_COLORS } from '../constants/index';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppText } from '../components/ui/AppText';
+import { AppButton } from '../components/ui/AppButton';
+import { tokens } from '../theme/tokens';
 import { Transaction, TransactionStatus } from '../types/wallet';
 import { CardanoAPIService } from '../services/CardanoAPIService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -401,54 +398,45 @@ const TransactionHistoryScreen: React.FC<Props> = ({ navigation }) => {
   const filteredTransactions = getFilteredTransactions();
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        {renderFilterButton('all', 'All')}
-        {renderFilterButton('received', 'Received')}
-        {renderFilterButton('sent', 'Sent')}
-        {renderFilterButton('pending', 'Pending')}
-      </View>
-
-      {/* Transaction List */}
-      {isLoading ? (
-        <View style={styles.loadingContainer}>
-          <TransactionSkeleton />
-          <TransactionSkeleton />
-          <TransactionSkeleton />
-          <TransactionSkeleton />
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
+      <Container>
+        {/* Filter Buttons */}
+        <View style={styles.filterContainer}>
+          {renderFilterButton('all', 'All')}
+          {renderFilterButton('received', 'Received')}
+          {renderFilterButton('sent', 'Sent')}
+          {renderFilterButton('pending', 'Pending')}
         </View>
-      ) : (
-        <FlatList
-          data={filteredTransactions}
-          renderItem={({ item }: { item: Transaction }) => renderTransactionItem({ item })}
-          keyExtractor={(item: Transaction) => item.id}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={onRefresh}
-              tintColor={CYBERPUNK_COLORS.primary}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContainer}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No transactions found</Text>
-              <Text style={styles.emptySubtext}>
-                {filter === 'all' 
-                  ? 'Your transactions will appear here' 
-                  : `No ${filter} transactions found`}
-              </Text>
-            </View>
-          }
-        />
-      )}
 
-      {renderTransactionDetails()}
+        {/* Transaction List */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <TransactionSkeleton />
+            <TransactionSkeleton />
+            <TransactionSkeleton />
+            <TransactionSkeleton />
+          </View>
+        ) : (
+          <FlatList
+            data={filteredTransactions}
+            renderItem={({ item }: { item: Transaction }) => renderTransactionItem({ item })}
+            keyExtractor={(item: Transaction) => item.id}
+            refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor={tokens.palette.primary} />}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContainer}
+            ListEmptyComponent={
+              <Card style={styles.emptyContainer}>
+                <AppText variant="h3" color={tokens.palette.textSecondary} style={styles.emptyText}>No transactions found</AppText>
+                <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.emptySubtext}>
+                  {filter === 'all' ? 'Your transactions will appear here' : `No ${filter} transactions found`}
+                </AppText>
+              </Card>
+            }
+          />
+        )}
+
+        {renderTransactionDetails()}
+      </Container>
     </LinearGradient>
   );
 };

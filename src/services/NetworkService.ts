@@ -35,6 +35,8 @@ export class NetworkService {
     // Certificate pinning service
     private certificateService: CertificatePinningService;
     private isInitialized = false;
+    // Optional RN SSL pinning fetch
+    private rnSslFetch: any | null = null;
 
     constructor() {
         this.certificateService = CertificatePinningService.getInstance();
@@ -67,6 +69,15 @@ export class NetworkService {
             await this.testInternetConnectivity();
 
             this.isInitialized = true;
+            // Try to load react-native-ssl-pinning fetch when running native
+            try {
+                // @ts-ignore dynamic require
+                const rnSsl = require('react-native-ssl-pinning');
+                if (rnSsl && rnSsl.fetch) {
+                    this.rnSslFetch = rnSsl.fetch;
+                    console.log('react-native-ssl-pinning detected and will be used when enabled');
+                }
+            } catch {}
             console.log('Network service initialized successfully');
 
             return true;
@@ -267,21 +278,26 @@ export class NetworkService {
                     mergedHeaders['Content-Type'] = 'application/json';
                 }
 
-                const response = await fetch(url, {
-                    signal: controller.signal,
-                    // Preserve caller options (method, body, credentials, etc.)
-                    ...restOptions,
-                    method: (restOptions as any).method ?? 'GET',
-                    headers: mergedHeaders,
-                });
+                const response = await this.performFetch(url, restOptions as any, mergedHeaders, controller.signal);
 
                 clearTimeout(timeoutId);
 
                 if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    let msg = response.statusText;
+                    try { const j = await response.json(); if (j?.message) msg = j.message; } catch {}
+                    throw new Error(`HTTP ${response.status}: ${msg}`);
                 }
 
-                return await response.json();
+                // Parse theo content-type
+                const ct = response.headers.get('content-type') || '';
+                if (ct.includes('application/json')) {
+                    return await response.json();
+                }
+                if (ct.includes('text/') || ct === '') {
+                    return (await response.text()) as unknown as T;
+                }
+                // Binary (e.g., CBOR) return ArrayBuffer
+                return (await response.arrayBuffer()) as unknown as T;
             } catch (error) {
                 clearTimeout(timeoutId);
                 throw error;
@@ -299,6 +315,82 @@ export class NetworkService {
             }
 
             throw error;
+        }
+    }
+
+    /**
+     * Thực hiện fetch, ưu tiên dùng react-native-ssl-pinning nếu khả dụng và pinning bật
+     */
+    private async performFetch(url: string, options: any, headers: Record<string, any>, signal?: AbortSignal): Promise<Response> {
+        // Use RN SSL pinning fetch when available and enabled
+        const usePinned = this.config.enableCertificatePinning && this.rnSslFetch;
+        if (usePinned) {
+            try {
+                // Resolve native cert aliases for host
+                const hostname = this.extractHostname(url);
+                const aliases = CertificatePinningService.getInstance().getAliasesForHost(hostname);
+                const res = await this.rnSslFetch(url, {
+                    method: options.method ?? 'GET',
+                    headers,
+                    body: options.body,
+                    timeoutInterval: Math.ceil(this.config.timeout / 1000),
+                    sslPinning: {
+                        // Cert aliases must be provided by native assets configuration
+                        certs: aliases,
+                    },
+                });
+                // Map RN SSL response to Response-like
+                const textBody = res.bodyString ?? '';
+                const status = res.status || 200;
+                const ok = status >= 200 && status < 300;
+                const contentType = this.findHeader(res.headers, 'content-type') || '';
+                const responseLike: Response = {
+                    ok,
+                    status,
+                    statusText: ok ? 'OK' : 'Error',
+                    headers: new Headers(Object.entries(res.headers || {}).map(([k, v]) => [String(k), String(v)])),
+                    url,
+                    redirected: false,
+                    type: 'basic',
+                    body: null as any,
+                    bodyUsed: false,
+                    clone: function (): Response { throw new Error('Not implemented'); },
+                    arrayBuffer: async function (): Promise<ArrayBuffer> {
+                        const encoder = new TextEncoder();
+                        const u8 = encoder.encode(textBody);
+                        return u8.buffer;
+                    },
+                    blob: async function (): Promise<Blob> { throw new Error('Not implemented'); },
+                    formData: async function (): Promise<FormData> { throw new Error('Not implemented'); },
+                    json: async function (): Promise<any> { return textBody ? JSON.parse(textBody) : {}; },
+                    text: async function (): Promise<string> { return textBody; },
+                } as unknown as Response;
+                return responseLike;
+            } catch (e) {
+                console.warn('Pinned fetch failed, falling back to standard fetch:', e);
+            }
+        }
+        // Standard fetch fallback
+        return await fetch(url, {
+            signal,
+            ...options,
+            method: options.method ?? 'GET',
+            headers,
+        });
+    }
+
+    private findHeader(headersObj: any, key: string): string | undefined {
+        if (!headersObj) return undefined;
+        const entry = Object.entries(headersObj).find(([k]) => String(k).toLowerCase() === key.toLowerCase());
+        return entry ? String(entry[1]) : undefined;
+    }
+
+    private extractHostname(url: string): string {
+        try {
+            return new URL(url).hostname;
+        } catch (error) {
+            const match = url.match(/^https?:\/\/([^\/]+)/);
+            return match ? match[1] : url;
         }
     }
 

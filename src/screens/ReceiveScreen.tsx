@@ -1,13 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Share,
-  Alert,
-  Dimensions,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Share, Alert, Dimensions } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import QRCode from 'react-native-qrcode-svg';
@@ -16,11 +8,11 @@ import * as Haptics from 'expo-haptics';
 import { RootStackParamList } from '../types/navigation';
 import { CYBERPUNK_COLORS } from '../constants/index';
 import { CardanoWalletService } from '../services/CardanoWalletService';
-import { 
-  CyberpunkButton, 
-  CyberpunkInput, 
-  CyberpunkCard 
-} from '../components/index';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppButton } from '../components/ui/AppButton';
+import { AppText } from '../components/ui/AppText';
+import { tokens } from '../theme/tokens';
 
 type ReceiveScreenNavigationProp = StackNavigationProp<RootStackParamList, 'ReceiveScreen'>;
 
@@ -111,155 +103,98 @@ const ReceiveScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* QR Code Card */}
-        <CyberpunkCard variant="glow" style={styles.qrCard}>
-          <View style={styles.qrContainer}>
-            <Text style={styles.qrTitle}>
-              {requestAmount || requestMessage ? 'Payment Request' : 'Wallet Address'}
-            </Text>
-            
-            <View style={styles.qrCodeWrapper}>
-              <QRCode
-                value={qrValue}
-                size={qrSize}
-                backgroundColor="white"
-                color={CYBERPUNK_COLORS.background}
-                logo={{
-                  uri: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
-                }}
-                logoSize={qrSize * 0.15}
-                logoBackgroundColor="transparent"
-              />
-            </View>
-
-            {/* QR Info */}
-            <View style={styles.qrInfo}>
-              {requestAmount && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Amount:</Text>
-                  <Text style={styles.infoValue}>{requestAmount} ADA</Text>
-                </View>
-              )}
-              
-              {requestMessage && (
-                <View style={styles.infoRow}>
-                  <Text style={styles.infoLabel}>Message:</Text>
-                  <Text style={styles.infoValue}>{requestMessage}</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Action Buttons */}
-            <View style={styles.qrActions}>
-              <CyberpunkButton
-                title="Share"
-                onPress={handleShare}
-                icon="📤"
-                size="medium"
-                style={styles.actionButton}
-              />
-              <CyberpunkButton
-                title="Copy Address"
-                onPress={handleCopyAddress}
-                variant="outline"
-                icon="📋"
-                size="medium"
-                style={styles.actionButton}
-              />
-            </View>
-          </View>
-        </CyberpunkCard>
-
-        {/* Address Display */}
-        <CyberpunkCard style={styles.addressCard}>
-          <Text style={styles.sectionTitle}>Wallet Address</Text>
-          <Text style={styles.address}>{walletAddress}</Text>
-        </CyberpunkCard>
-
-        {/* Payment Request Form */}
-        <CyberpunkCard style={styles.requestCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Payment Request</Text>
-            <CyberpunkButton
-              title={showAdvanced ? "Hide" : "Show"}
-              onPress={() => setShowAdvanced(!showAdvanced)}
-              variant="outline"
-              size="small"
-            />
-          </View>
-
-          {showAdvanced && (
-            <View style={styles.requestForm}>
-              <CyberpunkInput
-                label="Amount (ADA)"
-                value={requestAmount}
-                onChangeText={setRequestAmount}
-                placeholder="0.00"
-                keyboardType="numeric"
-                leftIcon="💰"
-                hint="Optional: specify amount to request"
-              />
-
-              <CyberpunkInput
-                label="Message"
-                value={requestMessage}
-                onChangeText={setRequestMessage}
-                placeholder="Payment for..."
-                leftIcon="💬"
-                hint="Optional: add a note for the sender"
-                multiline
-                numberOfLines={3}
-              />
-
-              {(requestAmount || requestMessage) && (
-                <CyberpunkButton
-                  title="Clear Request"
-                  onPress={handleClearRequest}
-                  variant="outline"
-                  size="small"
-                  style={styles.clearButton}
+        <Container padded>
+          {/* QR Code Card */}
+          <Card glow style={styles.qrCard}>
+            <View style={styles.qrContainer}>
+              <AppText variant="h2" color={tokens.palette.primary} style={{ marginBottom: 20, textAlign: 'center' }}>
+                {requestAmount || requestMessage ? 'Payment Request' : 'Wallet Address'}
+              </AppText>
+              <View style={styles.qrCodeWrapper}>
+                <QRCode
+                  value={qrValue}
+                  size={qrSize}
+                  backgroundColor="white"
+                  color={tokens.palette.background}
                 />
-              )}
+              </View>
+              {/* QR Info */}
+              <View style={styles.qrInfo}>
+                {requestAmount && (
+                  <View style={styles.infoRow}>
+                    <AppText variant="body2" color={tokens.palette.textSecondary}>Amount:</AppText>
+                    <AppText variant="body2">{requestAmount} ADA</AppText>
+                  </View>
+                )}
+                {requestMessage && (
+                  <View style={styles.infoRow}>
+                    <AppText variant="body2" color={tokens.palette.textSecondary}>Message:</AppText>
+                    <AppText variant="body2">{requestMessage}</AppText>
+                  </View>
+                )}
+              </View>
+              {/* Actions */}
+              <View style={styles.qrActions}>
+                <AppButton title="Share" onPress={handleShare} style={styles.actionButton} />
+                <AppButton title="Copy Address" variant="secondary" onPress={handleCopyAddress} style={styles.actionButton} />
+              </View>
             </View>
-          )}
-        </CyberpunkCard>
+          </Card>
 
-        {/* Instructions */}
-        <CyberpunkCard variant="outline" style={styles.instructionsCard}>
-          <Text style={styles.instructionsTitle}>📖 How to Receive ADA</Text>
-          
-          <View style={styles.instructionsList}>
-            <InstructionItem
-              step="1"
-              text="Share your wallet address or QR code with the sender"
-            />
-            <InstructionItem
-              step="2"
-              text="Or create a payment request with specific amount and message"
-            />
-            <InstructionItem
-              step="3"
-              text="Transactions will appear in your wallet once confirmed"
-            />
-            <InstructionItem
-              step="4"
-              text="Allow 2-5 minutes for network confirmation"
-            />
-          </View>
-        </CyberpunkCard>
+          {/* Address Display */}
+          <Card style={styles.addressCard}>
+            <AppText variant="h3" style={{ marginBottom: 8 }}>Wallet Address</AppText>
+            <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.address}>{walletAddress}</AppText>
+          </Card>
 
-        {/* Security Notice */}
-        <CyberpunkCard variant="outline" style={styles.securityCard}>
-          <Text style={styles.securityTitle}>🛡️ Security Notice</Text>
-          <Text style={styles.securityText}>
-            Your address is safe to share publicly. However, be cautious when sharing payment requests with amounts, as they could be reused by others.
-          </Text>
-        </CyberpunkCard>
+          {/* Payment Request Form */}
+          <Card style={styles.requestCard}>
+            <View style={styles.sectionHeader}>
+              <AppText variant="h3">Payment Request</AppText>
+              <AppButton title={showAdvanced ? 'Hide' : 'Show'} variant="ghost" onPress={() => setShowAdvanced(!showAdvanced)} style={{ width: 120 }} />
+            </View>
+            {showAdvanced && (
+              <View style={styles.requestForm}>
+                <View style={{ marginBottom: 12 }}>
+                  <AppText variant="body2" color={tokens.palette.textSecondary} style={{ marginBottom: 6 }}>Amount (ADA)</AppText>
+                  <View style={{ backgroundColor: tokens.palette.surface, borderWidth: 1, borderColor: tokens.palette.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }}>
+                    <Text style={{ color: tokens.palette.text, fontSize: 16 }}>{requestAmount}</Text>
+                  </View>
+                </View>
+                <View style={{ marginBottom: 12 }}>
+                  <AppText variant="body2" color={tokens.palette.textSecondary} style={{ marginBottom: 6 }}>Message</AppText>
+                  <View style={{ backgroundColor: tokens.palette.surface, borderWidth: 1, borderColor: tokens.palette.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 }}>
+                    <Text style={{ color: tokens.palette.text, fontSize: 16 }}>{requestMessage}</Text>
+                  </View>
+                </View>
+                {(requestAmount || requestMessage) && (
+                  <AppButton title="Clear Request" variant="ghost" onPress={handleClearRequest} style={styles.clearButton} />
+                )}
+              </View>
+            )}
+          </Card>
+
+          {/* Instructions */}
+          <Card variant="outline" style={styles.instructionsCard}>
+            <AppText variant="h3" color={tokens.palette.primary} style={{ marginBottom: 16 }}>📖 How to Receive ADA</AppText>
+            <View style={styles.instructionsList}>
+              <InstructionItem step="1" text="Share your wallet address or QR code with the sender" />
+              <InstructionItem step="2" text="Or create a payment request with specific amount and message" />
+              <InstructionItem step="3" text="Transactions will appear in your wallet once confirmed" />
+              <InstructionItem step="4" text="Allow 2-5 minutes for network confirmation" />
+            </View>
+          </Card>
+
+          {/* Security Notice */}
+          <Card variant="outline" style={styles.securityCard}>
+            <AppText variant="h3" color={tokens.palette.warning} style={{ marginBottom: 12 }}>🛡️ Security Notice</AppText>
+            <AppText variant="body2" color={tokens.palette.textSecondary} style={styles.securityText}>
+              Your address is safe to share publicly. However, be cautious when sharing payment requests with amounts, as they could be reused by others.
+            </AppText>
+          </Card>
+        </Container>
       </ScrollView>
     </LinearGradient>
   );

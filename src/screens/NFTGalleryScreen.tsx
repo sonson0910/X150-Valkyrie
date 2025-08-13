@@ -18,7 +18,12 @@ import * as Haptics from 'expo-haptics';
 import { RootStackParamList } from '../types/navigation';
 import { CYBERPUNK_COLORS } from '../constants/index';
 import { NFTManagementService, NFTAsset, NFTMetadata } from '../services/NFTManagementService';
-import { CyberpunkCard, CyberpunkButton, LoadingSpinner } from '../components/index';
+import { LoadingSpinner } from '../components/index';
+import { Container } from '../components/ui/Container';
+import { Card } from '../components/ui/Card';
+import { AppButton } from '../components/ui/AppButton';
+import { AppText } from '../components/ui/AppText';
+import { tokens } from '../theme/tokens';
 
 type NFTGalleryScreenNavigationProp = StackNavigationProp<RootStackParamList, 'NFTGallery'>;
 
@@ -154,7 +159,7 @@ const NFTGalleryScreen: React.FC<Props> = ({ navigation }) => {
       onPress={() => setSelectedNFT(nft)}
       activeOpacity={0.8}
     >
-      <CyberpunkCard style={styles.nftCard}>
+      <Card style={styles.nftCard}>
         <View style={styles.nftImageContainer}>
           {nft.metadata?.image ? (
             <Image
@@ -187,20 +192,11 @@ const NFTGalleryScreen: React.FC<Props> = ({ navigation }) => {
           </View>
 
           <View style={styles.nftActions}>
-            <CyberpunkButton
-              title="Transfer"
-              onPress={() => handleTransferNFT(nft)}
-              variant="outline"
-              style={styles.transferButton}
-            />
-            <CyberpunkButton
-              title="View Details"
-              onPress={() => setSelectedNFT(nft)}
-              style={styles.detailsButton}
-            />
+            <AppButton title="Transfer" variant="secondary" onPress={() => handleTransferNFT(nft)} style={styles.transferButton} />
+            <AppButton title="View Details" onPress={() => setSelectedNFT(nft)} style={styles.detailsButton} />
           </View>
         </View>
-      </CyberpunkCard>
+      </Card>
     </TouchableOpacity>
   );
 
@@ -282,20 +278,8 @@ const NFTGalleryScreen: React.FC<Props> = ({ navigation }) => {
               </View>
 
               <View style={styles.modalActions}>
-                <CyberpunkButton
-                  title="Transfer NFT"
-                  onPress={() => {
-                    setSelectedNFT(null);
-                    handleTransferNFT(selectedNFT);
-                  }}
-                  style={styles.modalButton}
-                />
-                <CyberpunkButton
-                  title="Close"
-                  onPress={() => setSelectedNFT(null)}
-                  variant="outline"
-                  style={styles.modalButton}
-                />
+                <AppButton title="Transfer NFT" onPress={() => { setSelectedNFT(null); handleTransferNFT(selectedNFT); }} style={styles.modalButton} />
+                <AppButton title="Close" variant="ghost" onPress={() => setSelectedNFT(null)} style={styles.modalButton} />
               </View>
             </ScrollView>
           </View>
@@ -309,68 +293,36 @@ const NFTGalleryScreen: React.FC<Props> = ({ navigation }) => {
   }
 
   return (
-    <LinearGradient
-      colors={[CYBERPUNK_COLORS.background, '#1a1f3a']}
-      style={styles.container}
-    >
+    <LinearGradient colors={[tokens.palette.background, tokens.palette.surfaceAlt]} style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>NFT Gallery</Text>
-          <Text style={styles.subtitle}>
-            Your digital art collection on Cardano
-          </Text>
-        </View>
+        <Container>
+          {/* Header */}
+          <View style={styles.header}>
+            <AppText variant="h1" color={tokens.palette.primary} style={styles.title}>NFT Gallery</AppText>
+            <AppText variant="body" color={tokens.palette.textSecondary} style={styles.subtitle}>Your digital art collection on Cardano</AppText>
+          </View>
 
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search NFTs..."
-            placeholderTextColor={CYBERPUNK_COLORS.textSecondary}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-        </View>
+          {/* Search Bar */}
+          <View style={styles.searchContainer}>
+            <TextInput style={styles.searchInput} placeholder="Search NFTs..." placeholderTextColor={CYBERPUNK_COLORS.textSecondary} value={searchQuery} onChangeText={setSearchQuery} />
+          </View>
 
-        {/* Mint NFT Button */}
-        <TouchableOpacity
-          style={styles.mintButton}
-          onPress={() => setShowMintModal(true)}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={[CYBERPUNK_COLORS.primary, CYBERPUNK_COLORS.accent]}
-            style={styles.mintButtonGradient}
-          >
-            <Text style={styles.mintButtonText}>🎨 MINT NEW NFT</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+          {/* Mint NFT Button */}
+          <AppButton title="🎨 MINT NEW NFT" onPress={() => setShowMintModal(true)} style={styles.mintButton} />
 
-        {/* NFT Collection */}
-        <View style={styles.collectionSection}>
-          <Text style={styles.sectionTitle}>
-            Your Collection ({filteredNFTs.length} NFTs)
-          </Text>
-          
-          {filteredNFTs.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyText}>No NFTs found</Text>
-              <Text style={styles.emptySubtext}>
-                {searchQuery ? 'Try adjusting your search' : 'Mint your first NFT to get started'}
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={filteredNFTs}
-              renderItem={renderNFTCard}
-              keyExtractor={(item) => item.id}
-              numColumns={2}
-              scrollEnabled={false}
-              columnWrapperStyle={styles.nftRow}
-            />
-          )}
-        </View>
+          {/* NFT Collection */}
+          <View style={styles.collectionSection}>
+            <Text style={styles.sectionTitle}>Your Collection ({filteredNFTs.length} NFTs)</Text>
+            {filteredNFTs.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyText}>No NFTs found</Text>
+                <Text style={styles.emptySubtext}>{searchQuery ? 'Try adjusting your search' : 'Mint your first NFT to get started'}</Text>
+              </View>
+            ) : (
+              <FlatList data={filteredNFTs} renderItem={renderNFTCard} keyExtractor={(item) => item.id} numColumns={2} scrollEnabled={false} columnWrapperStyle={styles.nftRow} />
+            )}
+          </View>
+        </Container>
       </ScrollView>
 
       {/* Mint NFT Modal */}
@@ -437,17 +389,8 @@ const NFTGalleryScreen: React.FC<Props> = ({ navigation }) => {
               />
 
               <View style={styles.modalActions}>
-                <CyberpunkButton
-                  title="Cancel"
-                  onPress={() => setShowMintModal(false)}
-                  variant="outline"
-                  style={styles.modalButton}
-                />
-                <CyberpunkButton
-                  title="Mint NFT"
-                  onPress={handleMintNFT}
-                  style={styles.modalButton}
-                />
+                <AppButton title="Cancel" variant="ghost" onPress={() => setShowMintModal(false)} style={styles.modalButton} />
+                <AppButton title="Mint NFT" onPress={handleMintNFT} style={styles.modalButton} />
               </View>
             </ScrollView>
           </View>

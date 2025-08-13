@@ -33,7 +33,11 @@
         "CAMERA",
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_ADVERTISE",
         "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
         "USE_BIOMETRIC",
         "USE_FINGERPRINT"
       ]
@@ -41,6 +45,13 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": []
+    "plugins": [
+      ["./plugins/with-ssl-pinning-certs", { "certs": ["blockfrost"] }]
+    ],
+    "extra": {
+      "sslPinning": {
+        "certs": ["blockfrost"]
+      }
+    }
   }
 }

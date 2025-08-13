@@ -105,26 +105,28 @@ export class ErrorHandler {
      */
     private async sendToMonitoring(error: AppError): Promise<void> {
         try {
-            // Enable Sentry integration
+            const dsn = (process.env as any)?.SENTRY_DSN;
+            if (!dsn || !this.isProduction) return;
             try {
-                // Comment out Sentry for web compatibility
-                // const Sentry = require('@sentry/react-native');
-                // Sentry.init({
-                //     dsn: process.env.SENTRY_DSN || 'https://your-sentry-dsn-here.sentry.io/project-id',
-                //     environment: 'production',
-                //     enableAutoSessionTracking: true,
-                //     debug: false,
-                //     beforeSend: (event: any) => {
-                //         // Filter out sensitive information
-                //         if (event.user) {
-                //             delete event.user.ip_address;
-                //             delete event.user.email;
-                //         }
-                //         return event;
-                //     }
-                // });
-
-                console.log('Production mode - Sentry integration disabled for web compatibility');
+                const Sentry = require('@sentry/react-native');
+                if (!Sentry?._valkyrieInited) {
+                    Sentry.init({
+                        dsn,
+                        environment: 'production',
+                        enableAutoSessionTracking: true,
+                        tracesSampleRate: 0.1,
+                        debug: false,
+                        beforeSend: (event: any) => {
+                            if (event.user) {
+                                delete event.user.ip_address;
+                                delete event.user.email;
+                            }
+                            return event;
+                        }
+                    });
+                    Sentry._valkyrieInited = true;
+                }
+                Sentry.captureMessage(`[${error.type}] ${error.message}`);
             } catch (sentryError) {
                 console.warn('Failed to initialize Sentry:', sentryError);
             }
