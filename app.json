@@ -55,12 +55,12 @@
             "blockfrost"
           ]
         }
-      ]
+      ],
+      "./plugins/with-rnbtclassic-android-fix"
     ],
     "extra": {
       "sslPinning": {
         "certs": [
-          "blockfrost",
           "blockfrost"
         ]
       },

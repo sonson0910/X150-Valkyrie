@@ -1,0 +1,52 @@
+// Fix react-native-bluetooth-classic Gradle settings for modern AGP/SDK
+// - Enforces compileSdkVersion/targetSdkVersion 35
+// - Removes legacy buildToolsVersion 28.0.3 if present
+// Usage: add to app.json plugins: ["./plugins/with-rnbtclassic-android-fix"]
+
+const fs = require('fs');
+const path = require('path');
+const { withDangerousMod } = require('@expo/config-plugins');
+
+function patchBluetoothClassicGradle(projectRoot) {
+    const gradlePath = path.join(projectRoot, 'node_modules', 'react-native-bluetooth-classic', 'android', 'build.gradle');
+    if (!fs.existsSync(gradlePath)) {
+        return;
+    }
+    let content = fs.readFileSync(gradlePath, 'utf8');
+
+    // Force compileSdkVersion 35
+    content = content.replace(/compileSdkVersion\s+safeExtGet\('\w+',\s*\d+\)/g, 'compileSdkVersion 35');
+    content = content.replace(/compileSdkVersion\s+\d+/g, 'compileSdkVersion 35');
+
+    // Force targetSdkVersion 35
+    content = content.replace(/targetSdkVersion\s+safeExtGet\('\w+',\s*\d+\)/g, 'targetSdkVersion 35');
+    content = content.replace(/targetSdkVersion\s+\d+/g, 'targetSdkVersion 35');
+
+    // Remove or update buildToolsVersion
+    content = content.replace(/buildToolsVersion\s+['"][0-9.]+['"]/g, "// buildToolsVersion removed by with-rnbtclassic-android-fix");
+
+    // Ensure Java 17 compatibility where needed
+    if (!/compileOptions\s*\{[\s\S]*?sourceCompatibility/.test(content)) {
+        content = content.replace(/android\s*\{/, match => (
+            match + "\n    compileOptions {\n        sourceCompatibility JavaVersion.VERSION_17\n        targetCompatibility JavaVersion.VERSION_17\n    }\n"
+        ));
+    }
+
+    fs.writeFileSync(gradlePath, content);
+}
+
+module.exports = function withRnbtclassicAndroidFix(config) {
+    return withDangerousMod(config, [
+        'android',
+        async (config) => {
+            try {
+                patchBluetoothClassicGradle(config.modRequest.projectRoot);
+            } catch (e) {
+                console.warn('with-rnbtclassic-android-fix failed:', e?.message || e);
+            }
+            return config;
+        }
+    ]);
+};
+
+
