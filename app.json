@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "Valkyrie Wallet",
-    "slug": "valkyrie-cardano-wallet",
+    "name": "x150-valkyrie",
+    "slug": "x150-valkyrie",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "assets/icon.png",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
+      "image": "assets/splash.png",
+      "resizeMode": "cover",
       "backgroundColor": "#0a0e27"
     },
     "assetBundlePatterns": [
@@ -25,12 +25,14 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "assets/adaptive-icon.png",
         "backgroundColor": "#0a0e27"
       },
       "package": "com.valkyrie.cardanowallet",
       "permissions": [
         "CAMERA",
+        "NFC",
+        "NFC_TRANSACTION_EVENT",
         "BLUETOOTH",
         "BLUETOOTH_ADMIN",
         "BLUETOOTH_SCAN",
@@ -46,12 +48,27 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      ["./plugins/with-ssl-pinning-certs", { "certs": ["blockfrost"] }]
+      [
+        "./plugins/with-ssl-pinning-certs",
+        {
+          "certs": [
+            "blockfrost"
+          ]
+        }
+      ]
     ],
     "extra": {
       "sslPinning": {
-        "certs": ["blockfrost"]
+        "certs": [
+          "blockfrost",
+          "blockfrost"
+        ]
+      },
+      "blockfrostApiKey": "preprod06dzhzKlynuTInzvxHDH5cXbdHo524DE",
+      "eas": {
+        "projectId": "499b0b75-f12a-43ef-93e7-58cc8ec7ca3d"
       }
-    }
+    },
+    "owner": "sonson0910"
   }
 }
