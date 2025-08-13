@@ -35,12 +35,25 @@ function patchBluetoothClassicGradle(projectRoot) {
     fs.writeFileSync(gradlePath, content);
 }
 
+function patchBluetoothClassicSource(projectRoot) {
+    const srcPath = path.join(projectRoot, 'node_modules', 'react-native-bluetooth-classic', 'android', 'src', 'main', 'java', 'kjd', 'reactnative', 'bluetooth', 'RNBluetoothClassicModule.java');
+    if (!fs.existsSync(srcPath)) return;
+    let code = fs.readFileSync(srcPath, 'utf8');
+    // Remove hasConstants override which no longer exists in RN 0.79
+    const hasConstantsRegex = /\n\s*@Override\s*\n\s*public\s+boolean\s+hasConstants\s*\(\)\s*\{[\s\S]*?return\s+true;[\s\S]*?\}\s*\n/;
+    if (hasConstantsRegex.test(code)) {
+        code = code.replace(hasConstantsRegex, '\n    // hasConstants() removed for RN 0.79+\n');
+        fs.writeFileSync(srcPath, code);
+    }
+}
+
 module.exports = function withRnbtclassicAndroidFix(config) {
     return withDangerousMod(config, [
         'android',
         async (config) => {
             try {
                 patchBluetoothClassicGradle(config.modRequest.projectRoot);
+                patchBluetoothClassicSource(config.modRequest.projectRoot);
             } catch (e) {
                 console.warn('with-rnbtclassic-android-fix failed:', e?.message || e);
             }
