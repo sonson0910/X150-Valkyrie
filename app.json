@@ -31,6 +31,8 @@
         "backgroundColor": "#0a0e27"
       },
       "package": "com.valkyrie.cardanowallet",
+      "enableProguardInReleaseBuilds": true,
+      "allowBackup": false,
       "permissions": [
         "CAMERA",
         "NFC",

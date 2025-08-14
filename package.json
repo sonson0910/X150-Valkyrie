@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "build": "eas build",
+    "analyze:bundle": "npx react-native bundle --platform android --dev false --entry-file index.js --bundle-output /tmp/index.android.bundle && npx source-map-explorer /tmp/index.android.bundle",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
