@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import * as Font from 'expo-font';
+import { InteractionManager, View, Text, TouchableOpacity, Platform, StyleSheet } from 'react-native';
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 // If @expo-google-fonts/inter is not installed, fonts will still load-fail gracefully
 let Inter_400Regular: any, Inter_500Medium: any, Inter_600SemiBold: any, Inter_700Bold: any;
-import { View, Text, TouchableOpacity, Platform, StyleSheet } from 'react-native';
+import { enableScreens, enableFreeze } from 'react-native-screens';
 
 // Import web polyfills for Cardano compatibility
 import './src/polyfills/web-polyfills';
@@ -42,6 +43,10 @@ import NameServiceManagerScreen from './src/screens/NameServiceManagerScreen';
 import MainTabs from './src/navigation/MainTabs';
 
 const Stack = createStackNavigator<RootStackParamList>();
+
+// Optimize RN navigation memory/CPU usage
+enableScreens(true);
+enableFreeze(true);
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
@@ -89,59 +94,52 @@ class ErrorBoundary extends React.Component<
 
 export default function App() {
   const [isInitialized, setIsInitialized] = useState(false);
-  const [fontsLoaded, setFontsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fontsLoaded] = useFonts({
+    Inter_400: Inter_400Regular,
+    Inter_500: Inter_500Medium,
+    Inter_600: Inter_600SemiBold,
+    Inter_700: Inter_700Bold,
+  });
 
   useEffect(() => {
-    console.log('App component mounted');
+    if (__DEV__) console.log('App component mounted');
     initializeApp();
-    loadFonts();
   }, []);
 
   const initializeApp = async () => {
     try {
-      console.log('Initializing app...');
+      if (__DEV__) console.log('Initializing app...');
       
       // Initialize error handler
-      const errorHandler = ErrorHandler.getInstance();
-      console.log('Error handler initialized');
+      ErrorHandler.getInstance();
       
-      // Initialize configuration and network (pinning, timeouts)
-      await ConfigurationService.getInstance().initialize();
-      await NetworkService.getInstance().initialize();
+      // Initialize configuration, network and wallet state in parallel
+      await Promise.allSettled([
+        ConfigurationService.getInstance().initialize(),
+        NetworkService.getInstance().initialize(),
+        WalletStateService.getInstance().initialize(),
+      ]);
 
-      // Initialize wallet state
-      await WalletStateService.getInstance().initialize();
-
-      // Initialize biometric service
-      const biometricService = BiometricService.getInstance();
-      const biometric = await biometricService.checkBiometricSupport();
+      // Defer biometric probing until after interactions to avoid blocking first paint
+      InteractionManager.runAfterInteractions(async () => {
+        try {
+          const biometricService = BiometricService.getInstance();
+          const biometric = await biometricService.checkBiometricSupport();
+          if (__DEV__ && biometric.isAvailable) {
+            // eslint-disable-next-line no-console
+            console.log('Biometric available:', biometric.type);
+          }
+        } catch {}
+      });
       
-      if (biometric.isAvailable) {
-        console.log('Biometric available:', biometric.type);
-      }
-      
-      console.log('App initialization completed');
+      if (__DEV__) console.log('App initialization completed');
       setIsInitialized(true);
     } catch (error) {
       console.error('App initialization failed:', error);
       setError(error instanceof Error ? error.message : 'Unknown error');
       // Continue without biometric
       setIsInitialized(true);
-    }
-  };
-
-  const loadFonts = async () => {
-    try {
-      await Font.loadAsync({
-        Inter_400: Inter_400Regular,
-        Inter_500: Inter_500Medium,
-        Inter_600: Inter_600SemiBold,
-        Inter_700: Inter_700Bold,
-      });
-      setFontsLoaded(true);
-    } catch (e) {
-      setFontsLoaded(true);
     }
   };
 
@@ -174,7 +172,7 @@ export default function App() {
     );
   }
 
-  console.log('Rendering main app...');
+  if (__DEV__) console.log('Rendering main app...');
 
   return (
     <ErrorBoundary>
