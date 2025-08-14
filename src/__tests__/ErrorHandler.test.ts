@@ -4,6 +4,9 @@ describe('ErrorHandler', () => {
     let errorHandler: ErrorHandler;
 
     beforeEach(() => {
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+        jest.spyOn(console, 'warn').mockImplementation(() => {});
+        jest.spyOn(console, 'log').mockImplementation(() => {});
         errorHandler = ErrorHandler.getInstance();
         // Clear error log before each test
         errorHandler.clearErrorLog();

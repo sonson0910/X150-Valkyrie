@@ -52,6 +52,7 @@ export class CardanoAPIService {
      * Get base URL for current network
      */
     private getBaseURL(): string {
+        // Support preprod via Blockfrost testnet endpoint, or switch to Koios if configured
         return this.currentNetwork === 'mainnet'
             ? 'https://cardano-mainnet.blockfrost.io/api/v0'
             : 'https://cardano-testnet.blockfrost.io/api/v0';
@@ -73,14 +74,34 @@ export class CardanoAPIService {
     private async apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
         try {
             const projectId = this.getProjectId(this.currentNetwork);
-            const response = await fetch(`${this.getBaseURL()}${endpoint}`, {
+            const blockfrostUrl = `${this.getBaseURL()}${endpoint}`;
+            let response = await fetch(blockfrostUrl, {
                 ...options,
                 headers: {
                     'project_id': projectId,
                     ...options.headers,
                 },
             });
-
+            // Fallback to Koios if Blockfrost fails and Koios token is present
+            if (!response.ok) {
+                const koiosToken = this.configService.getApiKey('koios', this.currentNetwork);
+                if (koiosToken) {
+                    const koiosBase = this.currentNetwork === 'mainnet'
+                        ? 'https://api.koios.rest/api/v1'
+                        : 'https://preprod.koios.rest/api/v1';
+                    const koiosEndpoint = this.mapEndpointToKoios(endpoint);
+                    if (koiosEndpoint) {
+                        response = await fetch(`${koiosBase}${koiosEndpoint}`, {
+                            ...options,
+                            headers: {
+                                'Authorization': `Bearer ${koiosToken}`,
+                                'Content-Type': 'application/json',
+                                ...options.headers,
+                            },
+                        });
+                    }
+                }
+            }
             if (!response.ok) {
                 let message = response.statusText;
                 try {
@@ -103,6 +124,33 @@ export class CardanoAPIService {
             console.error(`Cardano API call failed for ${endpoint}:`, error);
             throw error;
         }
+    }
+
+    private mapEndpointToKoios(endpoint: string): string | null {
+        // Minimal mapping for critical calls used in-app
+        if (endpoint.startsWith('/addresses/') && endpoint.endsWith('/utxos')) {
+            const addr = endpoint.split('/')[2];
+            return `/address_utxos?_address=${encodeURIComponent(addr)}`;
+        }
+        if (endpoint.startsWith('/addresses/')) {
+            const addr = endpoint.split('/')[2];
+            return `/address_info?_address=${encodeURIComponent(addr)}`;
+        }
+        if (endpoint.startsWith('/txs/') && endpoint.endsWith('/utxos')) {
+            const hash = endpoint.split('/')[2];
+            return `/tx_utxos?_tx_hash=${encodeURIComponent(hash)}`;
+        }
+        if (endpoint.startsWith('/txs/')) {
+            const hash = endpoint.split('/')[2];
+            return `/tx_info?_tx_hash=${encodeURIComponent(hash)}`;
+        }
+        if (endpoint === '/epochs/latest/parameters') {
+            return '/param_updates';
+        }
+        if (endpoint === '/blocks/latest') {
+            return '/tip';
+        }
+        return null;
     }
 
     /**

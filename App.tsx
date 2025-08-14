@@ -7,6 +7,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 // If @expo-google-fonts/inter is not installed, fonts will still load-fail gracefully
 let Inter_400Regular: any, Inter_500Medium: any, Inter_600SemiBold: any, Inter_700Bold: any;
 import { enableScreens, enableFreeze } from 'react-native-screens';
+import * as Sentry from '@sentry/react-native';
 
 // Import web polyfills for Cardano compatibility
 import './src/polyfills/web-polyfills';
@@ -47,6 +48,14 @@ const Stack = createStackNavigator<RootStackParamList>();
 // Optimize RN navigation memory/CPU usage
 enableScreens(true);
 enableFreeze(true);
+
+// Sentry init
+Sentry.init({
+  dsn: process.env.SENTRY_DSN || 'https://344b00dc27064c50b124dd7cd276a08e@o4509841616338944.ingest.us.sentry.io/4509841619746816',
+  tracesSampleRate: __DEV__ ? 0 : 0.1,
+  enableAutoSessionTracking: true,
+  debug: false,
+});
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component<

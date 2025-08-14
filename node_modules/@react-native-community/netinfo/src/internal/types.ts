@@ -37,7 +37,7 @@ interface NetInfoConnectedState<
   D extends Record<string, unknown> = Record<string, unknown>
 > {
   type: T;
-  isConnected: true;
+  isConnected: boolean;
   isInternetReachable: boolean | null;
   details: D & NetInfoConnectedDetails;
   isWifiEnabled?: boolean;
@@ -45,9 +45,10 @@ interface NetInfoConnectedState<
 
 interface NetInfoDisconnectedState<T extends NetInfoStateType> {
   type: T;
-  isConnected: false;
-  isInternetReachable: false;
+  isConnected: boolean;
+  isInternetReachable: boolean;
   details: null;
+  isWifiEnabled?: boolean;
 }
 
 export interface NetInfoUnknownState {
@@ -55,6 +56,7 @@ export interface NetInfoUnknownState {
   isConnected: boolean | null;
   isInternetReachable: null;
   details: null;
+  isWifiEnabled?: boolean;
 }
 
 export type NetInfoNoConnectionState = NetInfoDisconnectedState<
@@ -115,6 +117,7 @@ export type NetInfoSubscription = () => void;
 export interface NetInfoConfiguration {
   reachabilityUrl: string;
   reachabilityMethod?: NetInfoMethodType;
+  reachabilityHeaders?: Record<string, string>;
   reachabilityTest: (response: Response) => Promise<boolean>;
   reachabilityLongTimeout: number;
   reachabilityShortTimeout: number;

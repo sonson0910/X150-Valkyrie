@@ -1,0 +1,33 @@
+npm error code ERESOLVE
+npm error ERESOLVE could not resolve
+npm error
+npm error While resolving: @expo/webpack-config@19.0.1
+npm error Found: expo@53.0.20
+npm error node_modules/expo
+npm error   peer expo@"*" from expo-asset@11.1.7
+npm error   node_modules/expo-asset
+npm error     expo-asset@"~11.1.7" from expo@53.0.20
+npm error   peer expo@"*" from expo-av@15.1.7
+npm error   node_modules/expo-av
+npm error     expo-av@"~15.1.7" from the root project
+npm error   19 more (expo-clipboard, expo-constants, expo-crypto, ...)
+npm error
+npm error Could not resolve dependency:
+npm error peer expo@"^49.0.7 || ^50.0.0-0" from @expo/webpack-config@19.0.1
+npm error node_modules/@expo/webpack-config
+npm error   @expo/webpack-config@"~19.0.0" from the root project
+npm error
+npm error Conflicting peer dependency: expo@50.0.21
+npm error node_modules/expo
+npm error   peer expo@"^49.0.7 || ^50.0.0-0" from @expo/webpack-config@19.0.1
+npm error   node_modules/@expo/webpack-config
+npm error     @expo/webpack-config@"~19.0.0" from the root project
+npm error
+npm error Fix the upstream dependency conflict, or retry
+npm error this command with --force or --legacy-peer-deps
+npm error to accept an incorrect (and potentially broken) dependency resolution.
+npm error
+npm error
+npm error For a full report see:
+npm error C:\Users\Admin\AppData\Local\npm-cache\_logs\2025-08-14T02_02_43_168Z-eresolve-report.txt
+npm error A complete log of this run can be found in: C:\Users\Admin\AppData\Local\npm-cache\_logs\2025-08-14T02_02_43_168Z-debug-0.log

@@ -241,6 +241,20 @@ export class ErrorHandler {
     }
 
     /**
+     * Append audit record for quick-pay/NFC operations
+     */
+    async appendAudit(event: string, details?: any): Promise<void> {
+        try {
+            const key = 'audit_log_v1';
+            const existing = await AsyncStorage.getItem(key);
+            const arr = existing ? JSON.parse(existing) : [];
+            arr.push({ event, details, at: new Date().toISOString() });
+            if (arr.length > 500) arr.splice(0, arr.length - 500);
+            await AsyncStorage.setItem(key, JSON.stringify(arr));
+        } catch {}
+    }
+
+    /**
      * Tạo network error
      */
     static createNetworkError(message: string, details?: any): AppError {

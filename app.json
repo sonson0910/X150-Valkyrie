@@ -71,6 +71,10 @@
         ]
       },
       "blockfrostApiKey": "preprod06dzhzKlynuTInzvxHDH5cXbdHo524DE",
+      "koiosToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhZGRyIjoic3Rha2UxdTlyemQwNGpqeTZmbHducWZ6NnI3ank3NWZxazgzNWhnNjNqdTNqNjMyOHZtdHFhZDNqNDgiLCJleHAiOjE3ODY2OTc1MTgsInRpZXIiOjEsInByb2pJRCI6InhLQUxSVk5xVkFuWVRkWWYifQ.grTd1h1isW-xHYTZknLvyPZivMuAL0q5s8VuKSYrq8U",
+      "cardanoscanApiKey": "0fef4652-5386-4593-9652-0e8fb73a2573",
+      "pinataApiKey": "122e1b4a275fe787c93c",
+      "coingeckoApiKey": "CG-4dEAbeSLas1ANtDxZU4cJe5S",
       "eas": {
         "projectId": "499b0b75-f12a-43ef-93e7-58cc8ec7ca3d"
       }

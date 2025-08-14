@@ -24,6 +24,7 @@ import { NetworkService } from '../services/NetworkService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ConfigurationService } from '../services/ConfigurationService';
 import { GuardianRecoveryService, GuardianPolicy } from '../services/GuardianRecoveryService';
+import NFCService from '../services/NFCService';
 
 type SettingsScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Settings'>;
 
@@ -42,6 +43,10 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
   const [whitelist, setWhitelist] = useState<string[]>([]);
   const [nameServiceCfg, setNameServiceCfg] = useState<{ mapping: Record<string, string>; adaHandleEnabled: boolean; adaHandlePolicyId: string }>({ mapping: {}, adaHandleEnabled: false, adaHandlePolicyId: '' });
   const [guardianPolicy, setGuardianPolicy] = useState<GuardianPolicy | null>(null);
+  const [nfcAutoScan, setNfcAutoScan] = useState(false);
+  const [nfcAutoSubmit, setNfcAutoSubmit] = useState(true);
+  const [merchantAddress, setMerchantAddress] = useState('');
+  const [merchantAmount, setMerchantAmount] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -64,6 +69,10 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
         adaHandleEnabled: !!cfg.nameService?.adaHandle?.enabled,
         adaHandlePolicyId: cfg.nameService?.adaHandle?.policyId || ''
       });
+      setNfcAutoScan(!!(cfg as any)?.nfc?.autoScanOnSend);
+      setNfcAutoSubmit(!!(cfg as any)?.nfc?.autoSubmitOnNfc);
+      setMerchantAddress((cfg as any)?.nfc?.merchantAddress || '');
+      setMerchantAmount((cfg as any)?.nfc?.merchantAmount || '');
       // Load guardian policy
       const gp = await GuardianRecoveryService.getInstance().getPolicy();
       setGuardianPolicy(gp);
@@ -371,6 +380,89 @@ const SettingsScreen: React.FC<Props> = ({ navigation }) => {
             onPress={() => {
               // Show auto lock options
               showAutoLockOptions();
+            }}
+          />
+        </Card>
+
+        {/* NFC */}
+        <Card style={styles.section}>
+          <AppText variant="h2" color={tokens.palette.primary} style={styles.sectionTitle}>NFC</AppText>
+          <SettingItem
+            icon="📡"
+            title={`Auto-scan on Send: ${nfcAutoScan ? 'On' : 'Off'}`}
+            description="Automatically prompt for NFC when opening Send"
+            onPress={async () => {
+              const next = !nfcAutoScan;
+              setNfcAutoScan(next);
+              const cfgSvc = ConfigurationService.getInstance();
+              const cfg = cfgSvc.getConfiguration();
+              cfgSvc.setSetting('nfc', { ...(cfg as any).nfc, autoScanOnSend: next, autoSubmitOnNfc: nfcAutoSubmit, merchantAddress, merchantAmount });
+              Alert.alert('NFC', `Auto-scan ${next ? 'enabled' : 'disabled'}`);
+            }}
+          />
+          <SettingItem
+            icon="⚡"
+            title={`Auto-submit on NFC: ${nfcAutoSubmit ? 'On' : 'Off'}`}
+            description="When Quick Pay passes, submit immediately after NFC fill"
+            onPress={async () => {
+              const next = !nfcAutoSubmit;
+              setNfcAutoSubmit(next);
+              const cfgSvc = ConfigurationService.getInstance();
+              const cfg = cfgSvc.getConfiguration();
+              cfgSvc.setSetting('nfc', { ...(cfg as any).nfc, autoScanOnSend: nfcAutoScan, autoSubmitOnNfc: next, merchantAddress, merchantAmount });
+              Alert.alert('NFC', `Auto-submit ${next ? 'enabled' : 'disabled'}`);
+            }}
+          />
+          <SettingItem
+            icon="🏷️"
+            title="Write Merchant Tag"
+            description={merchantAddress ? `${merchantAddress.slice(0,12)}... • ${merchantAmount || 'amount?'}` : 'Prepare NFC tag with your address/amount'}
+            onPress={async () => {
+              const nfc = NFCService.getInstance();
+              const ok = await nfc.isSupported();
+              if (!ok) return Alert.alert('NFC', 'NFC not supported');
+              // Minimal flow: write current config; in full UI we would ask inputs
+              const cfgSvc = ConfigurationService.getInstance();
+              const cfg = cfgSvc.getConfiguration();
+              const address = (cfg as any)?.nfc?.merchantAddress || merchantAddress;
+              const amount = (cfg as any)?.nfc?.merchantAmount || merchantAmount;
+              if (!address) return Alert.alert('NFC', 'Set merchant address first');
+              const success = await nfc.writePaymentRequest({ recipient: address, amount });
+              Alert.alert('NFC', success ? 'Tag written' : 'Failed to write tag');
+            }}
+          />
+          <SettingItem
+            icon="🏪"
+            title="Set Merchant Address"
+            description={merchantAddress ? merchantAddress.slice(0,20) + '...' : 'Tap to paste or set'}
+            onPress={() => {
+              Alert.alert('Merchant Address', 'Paste your bech32 address in clipboard then press Confirm', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Confirm', onPress: async () => {
+                  // Placeholder: in full implementation we'd read from Clipboard API
+                  // Keep current state
+                  const cfgSvc = ConfigurationService.getInstance();
+                  const cfg = cfgSvc.getConfiguration();
+                  cfgSvc.setSetting('nfc', { ...(cfg as any).nfc, merchantAddress, merchantAmount, autoScanOnSend: nfcAutoScan, autoSubmitOnNfc: nfcAutoSubmit });
+                }}
+              ]);
+            }}
+          />
+          <SettingItem
+            icon="💰"
+            title={`Set Merchant Amount${merchantAmount ? `: ${merchantAmount}` : ''}`}
+            description="Optional preset amount for merchant NFC tag"
+            onPress={() => {
+              const options = ['','1','5','10','20','50'];
+              Alert.alert('Merchant Amount (ADA)', 'Select preset (empty = none):', [
+                ...options.map(v => ({ text: v === '' ? 'None' : v, onPress: () => {
+                  setMerchantAmount(v);
+                  const cfgSvc = ConfigurationService.getInstance();
+                  const cfg = cfgSvc.getConfiguration();
+                  cfgSvc.setSetting('nfc', { ...(cfg as any).nfc, merchantAddress, merchantAmount: v, autoScanOnSend: nfcAutoScan, autoSubmitOnNfc: nfcAutoSubmit });
+                }})),
+                { text: 'Cancel', style: 'cancel' }
+              ]);
             }}
           />
         </Card>

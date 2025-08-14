@@ -31,6 +31,7 @@ import * as Crypto from 'expo-crypto';
 import { CardanoWalletService } from '../services/CardanoWalletService';
 import { WalletStateService } from '../services/WalletStateService';
 import TransactionPreviewModal from './TransactionPreviewModal';
+import NFCService from '../services/NFCService';
 
 type SendTransactionScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SendTransaction'>;
 type SendTransactionScreenRouteProp = RouteProp<RootStackParamList, 'SendTransaction'>;
@@ -59,6 +60,23 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
         const cfg = await bio.getBiometricConfig();
         const enabled = cfg.isEnabled && (cfg.quickPayLimit !== '0');
         setRequireHold(!!cfg.holdToConfirm && enabled);
+
+        // Optional NFC auto-scan on open
+        try {
+          const cfgSvc = require('../services/ConfigurationService');
+          const appCfg = cfgSvc.ConfigurationService.getInstance().getConfiguration();
+          if ((appCfg as any)?.nfc?.autoScanOnSend) {
+            const nfc = NFCService.getInstance();
+            if (await nfc.isSupported()) {
+              // Fire and forget; do not block UI
+              nfc.readPaymentRequest(8000).then(p => {
+                if (p?.recipient) setRecipientAddress(prev => prev || p.recipient);
+                if (p?.amount) setAmount(prev => prev || p.amount!);
+                if (p?.note) setNote(prev => prev || p.note!);
+              }).catch(() => {});
+            }
+          }
+        } catch {}
       } catch {}
     })();
     return () => {
@@ -72,6 +90,39 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
   const [loadingUtxos, setLoadingUtxos] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewTx, setPreviewTx] = useState<any>(null);
+
+  const handleNfcScan = async (): Promise<void> => {
+    try {
+      const nfc = NFCService.getInstance();
+      const ok = await nfc.isSupported();
+      if (!ok) {
+        Alert.alert('NFC', 'NFC is not supported on this device');
+        return;
+      }
+      const enabled = await nfc.isEnabled();
+      if (!enabled) {
+        Alert.alert('NFC', 'Please enable NFC to scan payment requests');
+        return;
+      }
+      const payload = await nfc.readPaymentRequest(12000);
+      if (!payload) {
+        Alert.alert('NFC', 'No NFC tag detected');
+        return;
+      }
+      // Optional merchant signature verification
+      const okSig = await nfc.verifyMerchantSignature(payload);
+      if (!okSig) {
+        Alert.alert('NFC', 'Merchant signature invalid');
+        return;
+      }
+      if (payload.recipient) setRecipientAddress(payload.recipient);
+      if (payload.amount) setAmount(payload.amount);
+      if (payload.note) setNote(payload.note);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      Alert.alert('NFC', 'Failed to read NFC tag');
+    }
+  };
 
   // Process transaction with real implementation
   const processTransaction = async (): Promise<{ success: boolean; error?: string; txHash?: string }> => {
@@ -297,12 +348,20 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
       setIsProcessing(true);
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      // Check if amount is within quick pay limit
+      // Check quick pay policy (uses config: per-tx, daily cap, and optional whitelist)
       const amountLovelace = CardanoAPIService.adaToLovelace(amount);
       const biometricService = BiometricService.getInstance();
+      // Resolve address for whitelist decision without blocking the full process yet
+      let recipientForPolicy = recipientAddress;
+      try {
+        const api = CardanoAPIService.getInstance();
+        const network = api.getNetwork();
+        const resolved = await AddressResolverService.getInstance().resolve(recipientAddress, { network });
+        recipientForPolicy = resolved.address?.startsWith('addr1') ? resolved.address : recipientAddress;
+      } catch {}
       const quickPayResult = await biometricService.authenticateQuickPay(
         amountLovelace,
-        '10000000' // 10 ADA limit in lovelace
+        recipientForPolicy
       );
 
       if (!quickPayResult.success && quickPayResult.requireFullAuth) {
@@ -317,8 +376,20 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
         }
       }
 
-      // Process transaction
-      const transactionResult = await processTransaction();
+      // Auto-submit if NFC flow filled and config allows
+      let transactionResult: { success: boolean; error?: string; txHash?: string };
+      try {
+        const cfgSvc = require('../services/ConfigurationService');
+        const appCfg = cfgSvc.ConfigurationService.getInstance().getConfiguration();
+        const autoSubmit = !!(appCfg as any)?.nfc?.autoSubmitOnNfc;
+        if (autoSubmit && quickPayResult.success && !quickPayResult.requireFullAuth) {
+          transactionResult = await processTransaction();
+        } else {
+          transactionResult = await processTransaction();
+        }
+      } catch {
+        transactionResult = await processTransaction();
+      }
       
       if (!transactionResult.success) {
         throw new Error(transactionResult.error || 'Transaction failed');
@@ -348,6 +419,11 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
         <Card>
           <View style={styles.inputContainer}>
             <AppText variant="body" style={styles.inputLabel}>Recipient Address</AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <TouchableOpacity onPress={handleNfcScan} style={styles.nfcBtn}>
+                <Text style={styles.nfcBtnText}>Scan NFC</Text>
+              </TouchableOpacity>
+            </View>
             <TextInput
               style={styles.input}
               value={recipientAddress}
@@ -572,6 +648,20 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: CYBERPUNK_COLORS.background,
     letterSpacing: 1,
+  },
+  nfcBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: CYBERPUNK_COLORS.accent,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: CYBERPUNK_COLORS.border,
+    marginRight: 8,
+  },
+  nfcBtnText: {
+    color: CYBERPUNK_COLORS.background,
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 

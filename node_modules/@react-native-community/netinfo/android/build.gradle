@@ -9,7 +9,7 @@ buildscript {
     }
 
     dependencies {
-      classpath("com.android.tools.build:gradle:4.2.2")
+      classpath("com.android.tools.build:gradle:7.4.2")
     }
   }
 }
@@ -31,6 +31,12 @@ apply plugin: 'com.android.library'
 android {
   compileSdkVersion getExtOrIntegerDefault('compileSdkVersion')
 
+  def agpVersion = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION
+  // Check AGP version for backward compatibility reasons
+  if (agpVersion.tokenize('.')[0].toInteger() >= 7) {
+    namespace = "com.reactnativecommunity.netinfo"
+  }
+
   compileOptions {
       sourceCompatibility JavaVersion.VERSION_1_8
       targetCompatibility JavaVersion.VERSION_1_8
@@ -48,7 +54,16 @@ android {
 repositories {
   maven {
     // All of React Native (JS, Obj-C sources, Android binaries) is installed from npm
-    url "$rootDir/../node_modules/react-native/android"
+
+    // Use node resolver to locate react-native package
+    def reactNativePackage = file(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim())
+    if (reactNativePackage.exists()) {
+      url "$reactNativePackage.parentFile/android"
+    }
+    // Fallback to react-native package colocated in node_modules
+    else {
+      url "$rootDir/../node_modules/react-native/android"
+    }
   }
   google()
   mavenLocal()

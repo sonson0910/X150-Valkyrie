@@ -23,6 +23,7 @@ export class BiometricService {
     private static instance: BiometricService;
     private config: BiometricConfig;
     private rnBiometrics: ReactNativeBiometrics;
+    private lastAuthAtMs: number = 0;
 
     private constructor() {
         this.config = {
@@ -115,6 +116,14 @@ export class BiometricService {
                 return { success: false, error: 'Biometric authentication not enabled' };
             }
 
+            // Idle timeout enforcement
+            if (this.lastAuthAtMs > 0 && this.config.idleTimeoutMs && this.config.idleTimeoutMs > 0) {
+                const since = Date.now() - this.lastAuthAtMs;
+                if (since < this.config.idleTimeoutMs) {
+                    return { success: true };
+                }
+            }
+
             const { success } = await this.rnBiometrics.simplePrompt({
                 promptMessage: reason,
                 cancelButtonText: 'Cancel'
@@ -122,6 +131,7 @@ export class BiometricService {
 
             if (success) {
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                this.lastAuthAtMs = Date.now();
                 return { success: true };
             } else {
                 return { success: false, error: 'Authentication cancelled' };
@@ -135,7 +145,7 @@ export class BiometricService {
     /**
      * Quick Pay với sinh trắc học
      */
-    async authenticateQuickPay(amountLovelace: string, quickPayLimitLovelace: string): Promise<{
+    async authenticateQuickPay(amountLovelace: string, recipientBech32?: string): Promise<{
         success: boolean;
         requireFullAuth: boolean;
         error?: string;
@@ -148,6 +158,14 @@ export class BiometricService {
             const perTxLimit = BigInt(this.config.quickPayPerTxLimit || this.config.quickPayLimit || '0');
             const dailyCap = BigInt(this.config.quickPayDailyCap || '0');
             const dailySpent = BigInt(this.config.quickPayDailySpent?.amount || '0');
+
+            // If whitelist is configured and recipient provided, enforce it
+            if (recipientBech32 && (this.config.whitelistRecipients && this.config.whitelistRecipients.length > 0)) {
+                const isWhitelisted = this.config.whitelistRecipients.includes(recipientBech32);
+                if (!isWhitelisted) {
+                    return { success: false, requireFullAuth: true, error: 'Recipient not in quick-pay whitelist' };
+                }
+            }
 
             if (perTxLimit > 0n && amount > perTxLimit) {
                 return { success: false, requireFullAuth: true, error: 'Amount exceeds per-transaction limit' };

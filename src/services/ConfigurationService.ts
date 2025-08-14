@@ -68,6 +68,19 @@ export interface AppConfiguration {
         remoteResolvers?: string[]; // list of resolver endpoints
         adaHandle?: { enabled: boolean; policyId?: string };
     };
+    nfc?: {
+        autoScanOnSend: boolean;
+        merchantAddress?: string;
+        merchantAmount?: string; // ADA string
+        autoSubmitOnNfc?: boolean;
+    };
+    integrations?: {
+        koiosToken?: string;
+        pinataApiKey?: string;
+        pinataJwt?: string;
+        cardanoscanApiKey?: string;
+        coingeckoApiKey?: string;
+    };
 }
 
 export class ConfigurationService {
@@ -189,7 +202,14 @@ export class ConfigurationService {
                 mapping: {},
                 remoteResolvers: [],
                 adaHandle: { enabled: false }
-            }
+                },
+                nfc: {
+                    autoScanOnSend: true,
+                    autoSubmitOnNfc: true,
+                    merchantAddress: '',
+                    merchantAmount: ''
+                },
+                integrations: {}
         };
     }
 
@@ -359,16 +379,30 @@ export class ConfigurationService {
     /**
      * Get API key for service
      */
-    getApiKey(service: 'blockfrost' | 'cardanoscan' | 'adastat', network: 'mainnet' | 'testnet'): string | undefined {
+    getApiKey(service: 'blockfrost' | 'cardanoscan' | 'adastat' | 'koios' | 'pinata' | 'coingecko', network: 'mainnet' | 'testnet'): string | undefined {
         try {
             // Prefer runtime secrets if available (EAS/CI)
-            const runtimeVar = typeof process !== 'undefined' ? (process.env as any)?.BLOCKFROST_API_KEY as string | undefined;
+            let runtimeVar: string | undefined = undefined;
+            if (typeof process !== 'undefined') {
+                const env: any = (process as any).env;
+                if (service === 'blockfrost' && env?.BLOCKFROST_API_KEY) runtimeVar = env.BLOCKFROST_API_KEY;
+                if (service === 'koios' && env?.KOIOS_TOKEN) runtimeVar = env.KOIOS_TOKEN;
+                if (service === 'pinata' && (env?.PINATA_JWT || env?.PINATA_API_KEY)) runtimeVar = env.PINATA_JWT || env.PINATA_API_KEY;
+                if (service === 'cardanoscan' && env?.CARDANOSCAN_API_KEY) runtimeVar = env.CARDANOSCAN_API_KEY;
+                if (service === 'coingecko' && env?.COINGECKO_API_KEY) runtimeVar = env.COINGECKO_API_KEY;
+            }
             // Prefer Expo extra
             const extra: any = (Constants as any)?.expoConfig?.extra || (Constants as any)?.manifest?.extra || {};
-            const extraKey = extra?.blockfrostApiKey as string | undefined;
-            if (service === 'blockfrost' && (runtimeVar || extraKey)) {
-                return runtimeVar || extraKey;
-            }
+            const extraBlockfrost = extra?.blockfrostApiKey as string | undefined;
+            const extraKoios = extra?.koiosToken as string | undefined;
+            const extraPinata = (extra?.pinataJwt || extra?.pinataApiKey) as string | undefined;
+            const extraCardanoscan = extra?.cardanoscanApiKey as string | undefined;
+            const extraCoingecko = extra?.coingeckoApiKey as string | undefined;
+            if (service === 'blockfrost' && (runtimeVar || extraBlockfrost)) return runtimeVar || extraBlockfrost;
+            if (service === 'koios' && (runtimeVar || extraKoios)) return runtimeVar || extraKoios;
+            if (service === 'pinata' && (runtimeVar || extraPinata)) return runtimeVar || extraPinata;
+            if (service === 'cardanoscan' && (runtimeVar || extraCardanoscan)) return runtimeVar || extraCardanoscan;
+            if (service === 'coingecko' && (runtimeVar || extraCoingecko)) return runtimeVar || extraCoingecko;
             const networkConfig = this.config.network[network];
 
             switch (service) {
@@ -378,6 +412,12 @@ export class ConfigurationService {
                     return networkConfig.cardanoscanApiKey;
                 case 'adastat':
                     return networkConfig.adastatApiKey;
+                case 'koios':
+                    return this.config.integrations?.koiosToken;
+                case 'pinata':
+                    return this.config.integrations?.pinataJwt || this.config.integrations?.pinataApiKey;
+                case 'coingecko':
+                    return this.config.integrations?.coingeckoApiKey;
                 default:
                     return undefined;
             }
