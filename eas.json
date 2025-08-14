@@ -12,11 +12,7 @@
         "npm_config_legacy_peer_deps": "true"
       },
       "android": {
-        "gradleCommand": ":app:assembleDebug",
-        "env": {
-          "ORG_GRADLE_PROJECT_android":[
-          ]
-        }
+        "gradleCommand": ":app:assembleDebug"
       }
     },
     "preview": {
