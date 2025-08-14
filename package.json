@@ -26,11 +26,11 @@
     "@react-navigation/bottom-tabs": "^6.5.11",
     "@react-navigation/native": "^6.1.7",
     "@react-navigation/stack": "^6.3.17",
+    "@types/react": "~19.0.10",
     "bip39": "^3.1.0",
     "crypto-js": "^4.1.1",
     "expo": "^53.0.20",
     "expo-av": "~15.1.7",
-    "expo-barcode-scanner": "~13.0.0",
     "expo-clipboard": "~7.1.5",
     "expo-crypto": "~14.1.5",
     "expo-dev-client": "~5.2.4",
@@ -55,8 +55,7 @@
     "react-native-screens": "~4.11.1",
     "react-native-svg": "^15.11.2",
     "react-native-vector-icons": "^10.0.0",
-    "react-native-web": "^0.20.0",
-    "@types/react": "~19.0.10"
+    "react-native-web": "^0.20.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
@@ -69,7 +68,6 @@
     "@testing-library/react-native": "^12.0.0",
     "@types/crypto-js": "^4.2.2",
     "@types/node": "^20.0.0",
-    
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "assert": "^2.1.0",
@@ -99,7 +97,8 @@
       "reactNativeDirectoryCheck": {
         "exclude": [
           "react-native-bluetooth-classic",
-          "react-native-nfc-manager"
+          "react-native-nfc-manager",
+          "expo-barcode-scanner"
         ],
         "listUnknownPackages": false
       }
