@@ -20,7 +20,8 @@
       "infoPlist": {
         "NSFaceIDUsageDescription": "This app uses Face ID for secure wallet access and transaction authorization.",
         "NSCameraUsageDescription": "This app uses the camera to scan QR codes for transactions.",
-        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to transfer transactions when offline."
+        "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to transfer transactions when offline.",
+        "NFCReaderUsageDescription": "This app uses NFC to read secure payment requests."
       }
     },
     "android": {
@@ -57,7 +58,8 @@
         }
       ],
       "./plugins/with-rnbtclassic-android-fix",
-      "./plugins/with-nfc-manager-android-fix"
+      "./plugins/with-nfc-manager-android-fix",
+      "./plugins/with-ios-nfc-entitlements"
     ],
     "extra": {
       "sslPinning": {
