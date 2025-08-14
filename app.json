@@ -56,7 +56,8 @@
           ]
         }
       ],
-      "./plugins/with-rnbtclassic-android-fix"
+      "./plugins/with-rnbtclassic-android-fix",
+      "./plugins/with-nfc-manager-android-fix"
     ],
     "extra": {
       "sslPinning": {
