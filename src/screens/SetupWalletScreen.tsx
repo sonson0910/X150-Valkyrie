@@ -9,6 +9,7 @@ import {
   Alert,
   Animated,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -52,20 +53,19 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
     }
   }, [step]);
 
-  // Khi ở bước 2: hiển thị transformed mnemonic (mobile) hoặc demo fake (web)
+  // Khi ở bước 2: hiển thị mnemonic thật trên mobile; chỉ dùng demo fake trên web
   useEffect(() => {
     if (step !== 2) return;
     (async () => {
       try {
-        if (typeof window !== 'undefined') {
-          // Web demo
+        if (Platform.OS === 'web') {
           generateFakeMnemonic();
         } else if (originalMnemonic && userPassword) {
-          const transformed = await MnemonicTransformService.transformMnemonic(
+          // Optional: precompute transformed for secure backup (not displayed here)
+          await MnemonicTransformService.transformMnemonic(
             originalMnemonic,
             userPassword
           );
-          setFakeMnemonic(transformed);
         }
       } catch (e) {
         console.warn('Failed to prepare transformed mnemonic for display:', e);
@@ -134,6 +134,8 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
         setStep(2);
       } else if (step === 2) {
         console.log('Creating encrypted wallet...');
+        // Prevent accidental double-press looping
+        if (isCreating) return;
         await createEncryptedWallet();
       } else if (step === 3) {
         console.log('Setting up biometric...');
@@ -171,10 +173,18 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
       setFakeMnemonic(transformed);
       
       // Initialize wallet service từ mnemonic gốc (chỉ trong bộ nhớ)
-      const walletService = CardanoWalletService.getInstance();
-      await walletService.initializeFromMnemonic(originalMnemonic);
+      try {
+        const walletService = CardanoWalletService.getInstance('testnet');
+        const ok = await walletService.initializeFromMnemonic(originalMnemonic);
+        if (!ok) throw new Error('CSL unavailable');
+      } catch (e) {
+        console.warn('CSL not available in Expo Go, will finalize setup without key derivation');
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        setStep(3);
+        return;
+      }
       
-      // Create main account
+      // Create main account when engine available
       const account = await walletService.createAccount(0, walletName);
       
       // Save account info
@@ -320,8 +330,9 @@ const SetupWalletScreen: React.FC<Props> = ({ navigation }) => {
   );
 
   const renderStep2 = () => {
-    // Không hiển thị mnemonic gốc trực tiếp. Hiển thị transformed mnemonic sau khi mã hóa.
-    const wordsToDisplay = fakeMnemonic ? fakeMnemonic.split(' ') : [];
+    // Trên mobile hiển thị mnemonic THẬT theo yêu cầu; trên web hiển thị demo fake
+    const data = Platform.OS === 'web' ? fakeMnemonic : originalMnemonic;
+    const wordsToDisplay = data ? data.split(' ') : [];
     return (
       <Animated.View style={[styles.stepContainer, { opacity: fadeAnim }]}>
       <Text style={styles.stepTitle}>Your Recovery Phrase</Text>

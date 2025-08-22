@@ -7,6 +7,7 @@ import WalletHomeScreen from '../screens/WalletHomeScreen';
 import SendTransactionScreen from '../screens/SendTransactionScreen';
 import ReceiveScreen from '../screens/ReceiveScreen';
 import TransactionHistoryScreen from '../screens/TransactionHistoryScreen';
+import TransformedMnemonicScreen from '../screens/TransformedMnemonicScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import { tokens } from '../theme/tokens';
 
@@ -15,6 +16,7 @@ type TabParamList = {
   SendTransaction: undefined;
   ReceiveScreen: undefined;
   TransactionHistory: undefined;
+  TransformedMnemonic: undefined;
   Settings: undefined;
 };
 
@@ -25,6 +27,7 @@ const iconMap: Record<keyof TabParamList, string> = {
   SendTransaction: 'arrow-up-circle-outline',
   ReceiveScreen: 'arrow-down-circle-outline',
   TransactionHistory: 'time-outline',
+  TransformedMnemonic: 'key-outline',
   Settings: 'settings-outline',
 };
 
@@ -45,22 +48,22 @@ export default function MainTabs() {
           left: 16,
           right: 16,
           bottom: Platform.OS === 'ios' ? 24 : 16,
-          height: 64,
+          height: 72,
           backgroundColor: tokens.palette.surfaceAlt + 'CC',
           borderTopWidth: 0,
           borderRadius: tokens.radii.xl,
           shadowColor: '#000',
           shadowOpacity: 0.25,
-          shadowRadius: 12,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 12,
+          shadowRadius: 16,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 16,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          marginBottom: 6,
+          marginBottom: 8,
         },
         tabBarItemStyle: {
-          paddingVertical: 6,
+          paddingVertical: 8,
         },
         tabBarBackground: () => <View style={{ flex: 1, backgroundColor: 'transparent' }} />,
       })}
@@ -69,6 +72,7 @@ export default function MainTabs() {
       <Tab.Screen name="SendTransaction" component={SendTransactionScreen} options={{ title: 'Send' }} />
       <Tab.Screen name="ReceiveScreen" component={ReceiveScreen} options={{ title: 'Receive' }} />
       <Tab.Screen name="TransactionHistory" component={TransactionHistoryScreen} options={{ title: 'History' }} />
+      <Tab.Screen name="TransformedMnemonic" component={TransformedMnemonicScreen} options={{ title: '36 Words' }} />
       <Tab.Screen name="Settings" component={SettingsScreen} options={{ title: 'Settings' }} />
     </Tab.Navigator>
   );

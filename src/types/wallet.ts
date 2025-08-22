@@ -55,6 +55,18 @@ export interface EncryptedMnemonic {
     timestamp: string;
 }
 
+export interface BluetoothTransaction {
+    id: string;
+    signedTx: string;
+    metadata: {
+        amount: string;
+        recipient: string;
+        fee?: string;
+        memo?: string;
+        timestamp: Date;
+    };
+}
+
 export interface WalletState {
     isUnlocked: boolean;
     currentAccount?: WalletAccount;
@@ -71,15 +83,7 @@ export interface BiometricConfig {
     quickPayLimit: string;
 }
 
-export interface BluetoothTransaction {
-    id: string;
-    signedTx: string;
-    metadata: {
-        amount: string;
-        recipient: string;
-        timestamp: Date;
-    };
-}
+// Removed duplicate BluetoothTransaction interface - using the one above with more complete metadata
 
 export interface WalletConfig {
     network: 'mainnet' | 'testnet';

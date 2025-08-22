@@ -35,12 +35,14 @@ const ReceiveScreen: React.FC<Props> = ({ navigation }) => {
   }, [requestAmount, requestMessage]);
 
   const updateQRCode = () => {
-    if (requestAmount || requestMessage) {
+    const amount = (requestAmount || '').trim();
+    const message = (requestMessage || '').trim();
+    if (amount || message) {
       // Generate payment request QR
       const qrData = CardanoWalletService.generatePaymentQR(
         walletAddress,
-        requestAmount,
-        requestMessage
+        amount,
+        message
       );
       setQrValue(qrData);
     } else {
@@ -114,7 +116,7 @@ const ReceiveScreen: React.FC<Props> = ({ navigation }) => {
               </AppText>
               <View style={styles.qrCodeWrapper}>
                 <QRCode
-                  value={qrValue}
+                  value={qrValue || walletAddress}
                   size={qrSize}
                   backgroundColor="white"
                   color={tokens.palette.background}

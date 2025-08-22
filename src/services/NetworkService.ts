@@ -140,15 +140,15 @@ export class NetworkService {
         try {
             // Test with multiple endpoints for reliability
             const endpoints = [
-                'https://httpbin.org/get',
-                'https://api.blockfrost.io/health',
-                'https://google.com'
+                // Preprod health (Blockfrost uses testnet endpoint for preprod)
+                'https://cardano-testnet.blockfrost.io/api/v0/health'
             ];
 
             for (const endpoint of endpoints) {
                 try {
                     const response = await fetch(endpoint, {
-                        method: 'HEAD'
+                        method: 'GET',
+                        headers: { 'project_id': 'placeholder' }
                     });
 
                     if (response.ok) {
@@ -348,7 +348,7 @@ export class NetworkService {
                     ok,
                     status,
                     statusText: ok ? 'OK' : 'Error',
-                    headers: new Headers(Object.entries(res.headers || {}).map(([k, v]) => [String(k), String(v)])),
+                    headers: new Headers(Object.entries(res.headers || {}).map(([k, v]) => [String(k), String(v) as string] as [string, string])),
                     url,
                     redirected: false,
                     type: 'basic',
@@ -358,7 +358,7 @@ export class NetworkService {
                     arrayBuffer: async function (): Promise<ArrayBuffer> {
                         const encoder = new TextEncoder();
                         const u8 = encoder.encode(textBody);
-                        return u8.buffer;
+                        return u8.slice(0).buffer as ArrayBuffer;
                     },
                     blob: async function (): Promise<Blob> { throw new Error('Not implemented'); },
                     formData: async function (): Promise<FormData> { throw new Error('Not implemented'); },

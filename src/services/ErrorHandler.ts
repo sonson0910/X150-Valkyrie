@@ -1,6 +1,8 @@
 import { Alert, AlertButton } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { eventBus } from './EventBus';
+import { GlobalErrorHandler, AppError as StandardizedAppError, ErrorUtils, ERROR_CODES } from '../core/errors';
+import logger from '../utils/Logger';
 
 export enum ErrorType {
     NETWORK = 'NETWORK',
@@ -21,7 +23,8 @@ export enum ErrorSeverity {
     CRITICAL = 'CRITICAL'
 }
 
-export interface AppError {
+// Legacy error interface for backward compatibility
+export interface LegacyAppError {
     type: ErrorType;
     severity: ErrorSeverity;
     message: string;
@@ -34,8 +37,9 @@ export interface AppError {
 
 export class ErrorHandler {
     private static instance: ErrorHandler;
-    private errorLog: AppError[] = [];
+    private errorLog: LegacyAppError[] = [];
     private isProduction: boolean = false; // Configure based on environment
+    private enhancedHandler: any; // Will be initialized lazily
 
     static getInstance(): ErrorHandler {
         if (!ErrorHandler.instance) {
@@ -45,40 +49,179 @@ export class ErrorHandler {
     }
 
     /**
-     * Xử lý lỗi với logging và user feedback
+     * Initialize enhanced error handler integration
      */
-    handleError(
-        error: Error | string,
+    private getEnhancedHandler() {
+        if (!this.enhancedHandler) {
+            this.enhancedHandler = GlobalErrorHandler.getInstance();
+        }
+        return this.enhancedHandler;
+    }
+
+    /**
+     * Xử lý lỗi với logging và user feedback
+     * Enhanced with standardized error handling
+     */
+    async handleError(
+        error: Error | string | StandardizedAppError,
         context?: string,
         severity: ErrorSeverity = ErrorSeverity.MEDIUM,
         type: ErrorType = ErrorType.UNKNOWN
-    ): void {
-        const appError: AppError = {
-            type,
-            severity,
-            message: typeof error === 'string' ? error : error.message,
-            code: typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
-            details: typeof error === 'object' ? error : undefined,
-            timestamp: new Date(),
-            context
-        };
+    ): Promise<void> {
+        try {
+            // Create legacy error for backward compatibility
+            const legacyError: LegacyAppError = {
+                type,
+                severity,
+                message: typeof error === 'string' ? error : error.message,
+                code: typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
+                details: typeof error === 'object' ? error : undefined,
+                timestamp: new Date(),
+                context
+            };
 
-        // Log error
-        this.logError(appError);
+            // Handle with legacy system first for backward compatibility
+            this.logError(legacyError);
+            this.showUserFeedback(legacyError);
 
-        // Send to monitoring service in production
-        if (this.isProduction) {
-            this.sendToMonitoring(appError);
+            // Convert to standardized error and handle with enhanced system
+            let standardizedError: StandardizedAppError;
+            
+            if (error instanceof StandardizedAppError) {
+                standardizedError = error;
+            } else {
+                // Map legacy error types to standardized error codes
+                const errorCode = this.mapLegacyToStandardizedCode(type);
+                const errorContext = {
+                    service: 'ErrorHandler',
+                    method: 'handleError',
+                    legacyType: type,
+                    legacySeverity: severity,
+                    context: context
+                };
+                
+                if (typeof error === 'string') {
+                    standardizedError = new StandardizedAppError(errorCode, error, errorContext);
+                } else {
+                    standardizedError = StandardizedAppError.fromError(error, errorCode, errorContext);
+                }
+            }
+
+            // Handle with enhanced error handler
+            const enhancedHandler = this.getEnhancedHandler();
+            await enhancedHandler.handle(standardizedError, { 
+                legacyHandled: true,
+                service: 'ErrorHandler'
+            }, {
+                suppressUserNotification: true // Already handled by legacy system
+            });
+
+            logger.debug('Error handled with both legacy and enhanced systems', 'ErrorHandler.handleError', {
+                legacyType: type,
+                standardizedCode: standardizedError.code,
+                severity: severity
+            });
+
+        } catch (handlingError) {
+            // If enhanced handling fails, continue with legacy system only
+            logger.warn('Enhanced error handling failed, using legacy only', 'ErrorHandler.handleError', handlingError);
+            
+            const fallbackError: LegacyAppError = {
+                type,
+                severity,
+                message: typeof error === 'string' ? error : error.message,
+                code: typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
+                details: typeof error === 'object' ? error : undefined,
+                timestamp: new Date(),
+                context
+            };
+            
+            this.logError(fallbackError);
+            if (this.isProduction) {
+                this.sendToMonitoring(fallbackError);
+            }
+            this.showUserFeedback(fallbackError);
         }
+    }
 
-        // Show user feedback based on severity
-        this.showUserFeedback(appError);
+    /**
+     * Map legacy error types to standardized error codes
+     */
+    private mapLegacyToStandardizedCode(type: ErrorType): string {
+        switch (type) {
+            case ErrorType.NETWORK:
+                return ERROR_CODES.NET_CONNECTION_FAILED;
+            case ErrorType.AUTHENTICATION:
+                return ERROR_CODES.AUTH_INVALID_CREDENTIALS;
+            case ErrorType.TRANSACTION:
+                return ERROR_CODES.TXN_BUILD_FAILED;
+            case ErrorType.WALLET:
+                return ERROR_CODES.WAL_NOT_INITIALIZED;
+            case ErrorType.CRYPTO:
+                return ERROR_CODES.CRY_ENCRYPTION_FAILED;
+            case ErrorType.STORAGE:
+                return ERROR_CODES.STG_READ_FAILED;
+            case ErrorType.BLUETOOTH:
+                return ERROR_CODES.BLE_CONNECTION_FAILED;
+            case ErrorType.BIOMETRIC:
+                return ERROR_CODES.AUTH_BIOMETRIC_FAILED;
+            case ErrorType.UNKNOWN:
+            default:
+                return ERROR_CODES.SYS_INITIALIZATION_FAILED;
+        }
+    }
+
+    /**
+     * Enhanced error handling methods for direct standardized error handling
+     */
+    async handleStandardizedError(error: StandardizedAppError): Promise<void> {
+        const enhancedHandler = this.getEnhancedHandler();
+        await enhancedHandler.handle(error, { service: 'ErrorHandler' });
+    }
+
+    /**
+     * Create and handle standardized errors with convenient methods
+     */
+    async handleNetworkError(message: string, context?: any): Promise<void> {
+        const error = ErrorUtils.createNetworkError(ERROR_CODES.NET_CONNECTION_FAILED, message, context);
+        await this.handleStandardizedError(error);
+    }
+
+    async handleWalletError(message: string, context?: any): Promise<void> {
+        const error = ErrorUtils.createWalletError(ERROR_CODES.WAL_NOT_INITIALIZED, message, context);
+        await this.handleStandardizedError(error);
+    }
+
+    async handleTransactionError(message: string, context?: any): Promise<void> {
+        const error = ErrorUtils.createTransactionError(ERROR_CODES.TXN_BUILD_FAILED, message, context);
+        await this.handleStandardizedError(error);
+    }
+
+    async handleBluetoothError(message: string, context?: any): Promise<void> {
+        const error = ErrorUtils.createBluetoothError(ERROR_CODES.BLE_CONNECTION_FAILED, message, context);
+        await this.handleStandardizedError(error);
+    }
+
+    /**
+     * Get error statistics from enhanced handler
+     */
+    getEnhancedStatistics() {
+        const enhancedHandler = this.getEnhancedHandler();
+        return enhancedHandler.getStats();
+    }
+
+    /**
+     * Get recent errors from enhanced handler
+     */
+    getRecentEnhancedErrors(count?: number) {
+        const enhancedHandler = this.getEnhancedHandler();
+        return enhancedHandler.getRecent(count);
     }
 
     /**
      * Log error vào local storage và console
      */
-    private logError(error: AppError): void {
+    private logError(error: LegacyAppError): void {
         // Add to memory log
         this.errorLog.push(error);
 
@@ -87,14 +230,13 @@ export class ErrorHandler {
             this.errorLog = this.errorLog.slice(-100);
         }
 
-        // Console log in development
-        if (!this.isProduction) {
-            console.error(`[${error.type}] ${error.severity}: ${error.message}`, {
-                context: error.context,
-                details: error.details,
-                timestamp: error.timestamp
-            });
-        }
+        // Log with enhanced logger
+        logger.error(`[${error.type}] ${error.severity}: ${error.message}`, 'ErrorHandler.logError', {
+            context: error.context,
+            details: error.details,
+            timestamp: error.timestamp.toISOString(),
+            code: error.code
+        });
 
         // Save to AsyncStorage for debugging
         this.saveErrorLog();
@@ -103,7 +245,7 @@ export class ErrorHandler {
     /**
      * Gửi error đến monitoring service (Sentry)
      */
-    private async sendToMonitoring(error: AppError): Promise<void> {
+    private async sendToMonitoring(error: LegacyAppError): Promise<void> {
         try {
             const dsn = (process.env as any)?.SENTRY_DSN;
             if (!dsn || !this.isProduction) return;
@@ -128,17 +270,17 @@ export class ErrorHandler {
                 }
                 Sentry.captureMessage(`[${error.type}] ${error.message}`);
             } catch (sentryError) {
-                console.warn('Failed to initialize Sentry:', sentryError);
+                logger.warn('Failed to initialize Sentry', 'ErrorHandler.sendToMonitoring', sentryError);
             }
         } catch (monitoringError) {
-            console.error('Failed to send error to monitoring:', monitoringError);
+            logger.error('Failed to send error to monitoring', 'ErrorHandler.sendToMonitoring', monitoringError);
         }
     }
 
     /**
      * Hiển thị feedback cho user dựa trên severity
      */
-    private showUserFeedback(error: AppError): void {
+    private showUserFeedback(error: LegacyAppError): void {
         switch (error.severity) {
             case ErrorSeverity.LOW:
                 // Silent handling for low severity errors
@@ -202,7 +344,7 @@ export class ErrorHandler {
     /**
      * Lấy error log
      */
-    getErrorLog(): AppError[] {
+    getErrorLog(): LegacyAppError[] {
         return [...this.errorLog];
     }
 
@@ -257,7 +399,7 @@ export class ErrorHandler {
     /**
      * Tạo network error
      */
-    static createNetworkError(message: string, details?: any): AppError {
+    static createNetworkError(message: string, details?: any): LegacyAppError {
         return {
             type: ErrorType.NETWORK,
             severity: ErrorSeverity.MEDIUM,
@@ -270,7 +412,7 @@ export class ErrorHandler {
     /**
      * Tạo authentication error
      */
-    static createAuthError(message: string, details?: any): AppError {
+    static createAuthError(message: string, details?: any): LegacyAppError {
         return {
             type: ErrorType.AUTHENTICATION,
             severity: ErrorSeverity.HIGH,
@@ -283,7 +425,7 @@ export class ErrorHandler {
     /**
      * Tạo transaction error
      */
-    static createTransactionError(message: string, details?: any): AppError {
+    static createTransactionError(message: string, details?: any): LegacyAppError {
         return {
             type: ErrorType.TRANSACTION,
             severity: ErrorSeverity.HIGH,
@@ -296,7 +438,7 @@ export class ErrorHandler {
     /**
      * Tạo crypto error
      */
-    static createCryptoError(message: string, details?: any): AppError {
+    static createCryptoError(message: string, details?: any): LegacyAppError {
         return {
             type: ErrorType.CRYPTO,
             severity: ErrorSeverity.CRITICAL,

@@ -1,9 +1,10 @@
 {
   "compilerOptions": {
-    "target": "esnext",
+    "target": "ES2020",
     "lib": [
       "dom",
-      "esnext"
+      "ES2020",
+      "ES2020.bigint"
     ],
     "allowJs": true,
     "skipLibCheck": true,
@@ -11,7 +12,7 @@
     "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
@@ -42,6 +43,9 @@
       ],
       "@contexts/*": [
         "src/contexts/*"
+      ],
+      "@config/*": [
+        "src/config/*"
       ]
     },
     "types": [

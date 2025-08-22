@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { ErrorHandler, ErrorType, ErrorSeverity } from './ErrorHandler';
+import { environment } from '../config/Environment';
+import logger from '../utils/Logger';
 
 export interface NetworkConfiguration {
     mainnet: {
@@ -120,7 +122,17 @@ export class ConfigurationService {
             this.setupEnvironmentOverrides();
 
             this.isInitialized = true;
-            console.log('Configuration service initialized successfully');
+            logger.info('Configuration service initialized successfully', 'ConfigurationService.initialize');
+
+            // Apply Blockfrost key from Expo extra for preprod/testnet if provided
+            try {
+                const extra: any = (Constants as any)?.expoConfig?.extra || (Constants as any)?.manifest?.extra || {};
+                const bfKey: string | undefined = extra?.blockfrostApiKey;
+                if (bfKey) {
+                    await this.setApiKey('blockfrost', 'testnet', bfKey);
+                    await this.setApiKey('blockfrost', 'mainnet', bfKey);
+                }
+            } catch {}
 
             return true;
         } catch (error) {
@@ -141,25 +153,25 @@ export class ConfigurationService {
         return {
             network: {
                 mainnet: {
-                    blockfrostProjectId: 'YOUR_MAINNET_PROJECT_ID',
-                    cardanoscanApiKey: 'YOUR_CARDANOSCAN_API_KEY',
-                    adastatApiKey: 'YOUR_ADASTAT_API_KEY'
+                    blockfrostProjectId: environment.get('BLOCKFROST_API_KEY') || 'YOUR_MAINNET_PROJECT_ID',
+                    cardanoscanApiKey: environment.get('COINGECKO_API_KEY'),
+                    adastatApiKey: undefined
                 },
                 testnet: {
-                    blockfrostProjectId: 'YOUR_TESTNET_PROJECT_ID',
-                    cardanoscanApiKey: 'YOUR_CARDANOSCAN_TESTNET_API_KEY',
-                    adastatApiKey: 'YOUR_ADASTAT_TESTNET_API_KEY'
+                    blockfrostProjectId: environment.get('BLOCKFROST_API_KEY') || 'YOUR_TESTNET_PROJECT_ID', 
+                    cardanoscanApiKey: environment.get('COINGECKO_API_KEY'),
+                    adastatApiKey: undefined
                 }
             },
             security: {
                 certificatePinning: {
-                    enabled: true,
-                    strictMode: true,
+                    enabled: environment.get('ENABLE_CERTIFICATE_PINNING'),
+                    strictMode: environment.isProduction(),
                     allowedDomains: ['api.blockfrost.io', 'cardanoscan.io', 'adastat.net'],
                     hosts: {
                         'api.blockfrost.io': {
                             aliases: ['blockfrost'],
-                            strict: true,
+                            strict: environment.isProduction(),
                             fingerprints: [
                                 // Cập nhật fingerprint SHA-256 thật khi phát hành
                                 'sha256/REPLACE_WITH_REAL_BLOCKFROST_FINGERPRINT'
@@ -170,34 +182,34 @@ export class ConfigurationService {
                 biometricAuth: {
                     enabled: true,
                     fallbackToPasscode: true,
-                    timeout: 30000
+                    timeout: environment.get('BIOMETRIC_TIMEOUT')
                 },
                 encryption: {
-                    algorithm: 'AES-256',
-                    keyDerivation: 'PBKDF2',
-                    iterations: 100000
+                    algorithm: 'AES-256' as const,
+                    keyDerivation: 'PBKDF2' as const,
+                    iterations: environment.get('PBKDF2_ITERATIONS')
                 }
             },
             performance: {
                 cache: {
                     enabled: true,
-                    defaultTTL: 30000,
+                    defaultTTL: environment.get('CACHE_TTL'),
                     maxSize: 100
                 },
                 monitoring: {
-                    enabled: true,
+                    enabled: environment.get('ENABLE_PERFORMANCE_MONITORING'),
                     slowOperationThreshold: 1000,
-                    logLevel: 'info'
+                    logLevel: 'info' as const
                 },
                 network: {
-                    timeout: 10000,
-                    retryAttempts: 3,
-                    retryDelay: 1000
+                    timeout: environment.get('API_TIMEOUT'),
+                    retryAttempts: environment.get('MAX_RETRY_ATTEMPTS'),
+                    retryDelay: environment.get('RETRY_DELAY')
                 }
             },
-            environment: 'development',
-            version: '1.0.0',
-            buildNumber: '1',
+            environment: environment.get('ENVIRONMENT'),
+            version: environment.get('APP_VERSION'),
+            buildNumber: environment.get('BUILD_NUMBER'),
             nameService: {
                 mapping: {},
                 remoteResolvers: [],
@@ -239,7 +251,7 @@ export class ConfigurationService {
     async saveConfiguration(): Promise<void> {
         try {
             await AsyncStorage.setItem('app_configuration', JSON.stringify(this.config));
-            console.log('Configuration saved to storage');
+            logger.debug('Configuration saved to storage', 'ConfigurationService.saveConfiguration');
         } catch (error) {
             this.errorHandler.handleError(
                 error as Error,

@@ -108,10 +108,11 @@ export class WalletDataService {
                 const walletService = CardanoWalletService.getInstance();
 
                 // Get transaction history from API instead
-                const transactions = await this.cardanoAPIService.getAddressTransactions(address, limit);
+                const transactions = await this.cardanoAPIService.getAddressTransactions(address, limit).catch(() => []);
 
                 // Transform to TransactionData format
-                const transactionData: TransactionData[] = transactions.map((tx: any) => ({
+                const txList: any[] = Array.isArray(transactions) ? transactions : [];
+                const transactionData: TransactionData[] = txList.map((tx: any) => ({
                     id: tx.tx_hash || tx.hash || `tx_${Date.now()}`,
                     hash: tx.tx_hash || tx.hash || '',
                     type: this.determineTransactionType(tx, address),
@@ -120,7 +121,7 @@ export class WalletDataService {
                     from: (tx as any).from || 'unknown',
                     to: (tx as any).to || 'unknown',
                     status: this.mapTransactionStatus((tx as any).status || 'confirmed'),
-                    timestamp: new Date(((tx as any).block_time || (tx as any).time || Date.now()) * 1000),
+                    timestamp: new Date((((tx as any).block_time || (tx as any).time) ? ((tx as any).block_time || (tx as any).time) * 1000 : Date.now())),
                     blockHeight: 0, // Will be updated below
                     confirmations: 0 // Will be updated below
                 }));
@@ -425,8 +426,8 @@ export class WalletDataService {
         headers?: Record<string, string>;
     }> {
         const baseUrl = network === 'mainnet'
-            ? 'https://api.blockfrost.io/v0'
-            : 'https://api.blockfrost.io/v0/testnet';
+            ? 'https://cardano-mainnet.blockfrost.io/api/v0'
+            : 'https://cardano-testnet.blockfrost.io/api/v0';
 
         return [
             {

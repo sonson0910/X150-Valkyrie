@@ -151,7 +151,7 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
       // Implement actual Cardano transaction
       try {
         const fromAddress = await getCurrentWalletAddress();
-        const wallet = CardanoWalletService.getInstance('mainnet');
+        const wallet = CardanoWalletService.getInstance('testnet');
         const amountLovelace = CardanoAPIService.adaToLovelace(amount);
         const tx = await wallet.buildTransaction(
           fromAddress,
@@ -233,7 +233,7 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
       setLoadingUtxos(true);
       const addr = await getCurrentWalletAddress();
       const api = CardanoAPIService.getInstance();
-      api.setNetwork('mainnet');
+      api.setNetwork('testnet');
       const utxos = await api.getAddressUTXOs(addr);
       setAvailableUtxos(utxos);
     } catch (e) {
@@ -296,7 +296,7 @@ const SendTransactionScreen: React.FC<Props> = ({ navigation, route }) => {
       // In a real flow, signedTransaction must be CBOR hex string
       // Submit via Blockfrost API
       const cardanoAPI = CardanoAPIService.getInstance();
-      cardanoAPI.setNetwork('mainnet');
+      cardanoAPI.setNetwork('testnet');
       const txHash = await cardanoAPI.submitTransaction(signedTransaction);
       
       console.log('Transaction submitted successfully with hash:', txHash);

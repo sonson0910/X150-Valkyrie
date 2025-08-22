@@ -1,0 +1,87 @@
+# Snyk security configuration
+# https://snyk.io/docs/using-snyk
+
+# Language settings
+language-settings:
+  javascript:
+    enableSecureCodeAnalysis: true
+    secureCodeAnalysisMode: strict
+
+# Patch configuration
+patch:
+  # Automatically apply security patches
+  auto: true
+  
+# Ignore configuration for known issues
+ignore:
+  # Example: Ignore dev dependencies with low severity
+  # 'SNYK-JS-EXAMPLE-12345':
+  #   - '*':
+  #       reason: 'Development dependency with acceptable risk'
+  #       expires: '2024-12-31T23:59:59.999Z'
+
+# Test configuration
+test:
+  exclude:
+    # Exclude test files from security scans
+    - "**/__tests__/**"
+    - "**/*.test.js"
+    - "**/*.test.ts"
+    - "**/*.spec.js"
+    - "**/*.spec.ts"
+    - "**/jest.config.js"
+    - "**/test-setup.js"
+    
+  severity-threshold: high
+  
+  # Include dev dependencies in tests
+  dev: true
+
+# Monitor configuration
+monitor:
+  project-name: valkyrie-cardano-wallet
+  
+# Code analysis settings
+code:
+  # Enable SAST analysis
+  enableSast: true
+  
+  # Security rules
+  rules:
+    # Detect hardcoded secrets
+    - rule: "no-hardcoded-secrets"
+      severity: "error"
+    
+    # Require secure random generation
+    - rule: "secure-random"
+      severity: "error"
+      
+    # Validate crypto implementation
+    - rule: "crypto-best-practices"
+      severity: "warning"
+      
+    # Check for SQL injection
+    - rule: "no-sql-injection"
+      severity: "error"
+      
+    # Validate input sanitization
+    - rule: "input-validation"
+      severity: "warning"
+
+# File patterns to include/exclude
+exclude:
+  - "node_modules/"
+  - "build/"
+  - "dist/"
+  - "coverage/"
+  - "*.log"
+  - ".git/"
+  
+include:
+  - "src/"
+  - "scripts/"
+  - "*.json"
+  - "*.js"
+  - "*.ts"
+  - "*.tsx"
+

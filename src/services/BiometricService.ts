@@ -1,8 +1,12 @@
 import ReactNativeBiometrics, { BiometryTypes } from 'react-native-biometrics';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { EncryptedMnemonic } from '../types/wallet';
 import * as SecureStore from 'expo-secure-store';
 import { STORAGE_KEYS } from '../constants/index';
 import * as Haptics from 'expo-haptics';
+import { environment } from '../config/Environment';
+import { MemoryUtils } from '../utils/MemoryUtils';
+import logger from '../utils/Logger';
 
 export interface BiometricConfig {
     isEnabled: boolean;
@@ -22,23 +26,36 @@ export interface BiometricConfig {
 export class BiometricService {
     private static instance: BiometricService;
     private config: BiometricConfig;
-    private rnBiometrics: ReactNativeBiometrics;
+    private rnBiometrics: ReactNativeBiometrics | null;
     private lastAuthAtMs: number = 0;
 
     private constructor() {
         this.config = {
             isEnabled: false,
             type: 'none',
-            quickPayLimit: '10000000', // legacy 10 ADA
-            timeout: 30000, // 30 seconds
-            quickPayPerTxLimit: '10000000', // 10 ADA default
-            quickPayDailyCap: '50000000', // 50 ADA/day
+            quickPayLimit: environment.get('DEFAULT_QUICK_PAY_LIMIT'), // legacy
+            timeout: environment.get('BIOMETRIC_TIMEOUT'),
+            quickPayPerTxLimit: environment.get('DEFAULT_QUICK_PAY_LIMIT'),
+            quickPayDailyCap: environment.get('DEFAULT_DAILY_CAP'),
             quickPayDailySpent: { date: new Date().toISOString().slice(0, 10), amount: '0' },
             whitelistRecipients: [],
             holdToConfirm: true,
-            idleTimeoutMs: 120000, // 2 minutes
+            idleTimeoutMs: environment.get('IDLE_TIMEOUT'),
         };
-        this.rnBiometrics = new ReactNativeBiometrics();
+        // Instantiate native biometrics when available; fall back to Expo LocalAuthentication in Expo Go/BlueStacks
+        // In Expo Go or emulators that lack the native module, `react-native-biometrics` may be undefined or non-constructible.
+        // Guard hard to avoid any runtime TypeError.
+        try {
+            const maybeCtor: any = ReactNativeBiometrics as any;
+            if (maybeCtor && typeof maybeCtor === 'function') {
+                const instance = new maybeCtor();
+                this.rnBiometrics = instance && typeof instance === 'object' ? instance : null;
+            } else {
+                this.rnBiometrics = null;
+            }
+        } catch {
+            this.rnBiometrics = null;
+        }
     }
 
     public static getInstance(): BiometricService {
@@ -49,6 +66,40 @@ export class BiometricService {
     }
 
     /**
+     * Clear sensitive biometric data from memory
+     */
+    private clearSensitiveData(): void {
+        try {
+            // Clear any cached biometric credentials
+            if (this.config) {
+                // Zero out quick pay spent data if it contains sensitive amounts
+                if (this.config.quickPayDailySpent) {
+                    MemoryUtils.secureCleanup(this.config.quickPayDailySpent);
+                }
+                
+                // Clear whitelist recipients if needed
+                if (this.config.whitelistRecipients) {
+                    this.config.whitelistRecipients.forEach((recipient) => {
+                        MemoryUtils.secureCleanup(recipient);
+                    });
+                }
+            }
+
+            // Reset auth timestamp
+            this.lastAuthAtMs = 0;
+
+            // Force garbage collection if available
+            if (typeof global !== 'undefined' && global.gc) {
+                global.gc();
+            }
+
+            logger.debug('Biometric sensitive data cleared from memory', 'BiometricService.clearSensitiveData');
+        } catch (error) {
+            logger.warn('Failed to clear biometric sensitive data', 'BiometricService.clearSensitiveData', error);
+        }
+    }
+
+    /**
      * Kiểm tra hỗ trợ sinh trắc học
      */
     async checkBiometricSupport(): Promise<{
@@ -56,23 +107,37 @@ export class BiometricService {
         type: 'fingerprint' | 'face' | 'none';
     }> {
         try {
-            const { available, biometryType } = await this.rnBiometrics.isSensorAvailable();
+            // Prefer native module when available
+            if (this.rnBiometrics && typeof (this.rnBiometrics as any).isSensorAvailable === 'function') {
+                const { available, biometryType } = await (this.rnBiometrics as any).isSensorAvailable();
 
-            if (available) {
-                let type: 'fingerprint' | 'face' | 'none' = 'none';
+                if (available) {
+                    let type: 'fingerprint' | 'face' | 'none' = 'none';
 
-                if (biometryType === BiometryTypes.TouchID || biometryType === BiometryTypes.Biometrics) {
-                    type = 'fingerprint';
-                } else if (biometryType === BiometryTypes.FaceID) {
-                    type = 'face';
+                    if (biometryType === BiometryTypes.TouchID || biometryType === BiometryTypes.Biometrics) {
+                        type = 'fingerprint';
+                    } else if (biometryType === BiometryTypes.FaceID) {
+                        type = 'face';
+                    }
+
+                    return { isAvailable: true, type };
                 }
-
-                return { isAvailable: true, type };
             }
 
+            // Fallback to Expo LocalAuthentication (works in Expo Go)
+            const hasHardware = await LocalAuthentication.hasHardwareAsync();
+            const enrolled = await LocalAuthentication.isEnrolledAsync();
+            if (!hasHardware || !enrolled) return { isAvailable: false, type: 'none' };
+            const types = await LocalAuthentication.supportedAuthenticationTypesAsync();
+            const type = types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)
+                ? 'fingerprint'
+                : types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)
+                    ? 'face'
+                    : 'none';
+            return { isAvailable: true, type };
+
             return { isAvailable: false, type: 'none' };
-        } catch (error) {
-            console.error('Biometric check failed:', error);
+        } catch {
             return { isAvailable: false, type: 'none' };
         }
     }
@@ -82,27 +147,37 @@ export class BiometricService {
      */
     async setupBiometric(): Promise<{ success: boolean; error?: string }> {
         try {
-            const { available } = await this.rnBiometrics.isSensorAvailable();
-
-            if (!available) {
-                return { success: false, error: 'Biometric authentication not available' };
+            if (this.rnBiometrics && typeof (this.rnBiometrics as any).isSensorAvailable === 'function') {
+                const { available } = await (this.rnBiometrics as any).isSensorAvailable();
+                if (!available) {
+                    return { success: false, error: 'Biometric authentication not available' };
+                }
+                const { success } = await (this.rnBiometrics as any).simplePrompt({
+                    promptMessage: 'Authenticate to enable biometric login',
+                    cancelButtonText: 'Cancel'
+                });
+                if (success) {
+                    this.config.isEnabled = true;
+                    await this.saveBiometricConfig();
+                    return { success: true };
+                }
+                return { success: false, error: 'Authentication failed' };
             }
 
-            // Test authentication
-            const { success } = await this.rnBiometrics.simplePrompt({
-                promptMessage: 'Authenticate to enable biometric login',
-                cancelButtonText: 'Cancel'
-            });
-
-            if (success) {
+            // Fallback to Expo LocalAuthentication
+            let canUse = false;
+            let enrolled = false;
+            try { canUse = await LocalAuthentication.hasHardwareAsync(); } catch {}
+            try { enrolled = await LocalAuthentication.isEnrolledAsync(); } catch {}
+            if (!canUse || !enrolled) return { success: false, error: 'Biometric authentication not available' };
+            const res = await LocalAuthentication.authenticateAsync({ promptMessage: 'Authenticate to enable biometric login', cancelLabel: 'Cancel', disableDeviceFallback: false });
+            if (res.success) {
                 this.config.isEnabled = true;
                 await this.saveBiometricConfig();
                 return { success: true };
-            } else {
-                return { success: false, error: 'Authentication failed' };
             }
-        } catch (error) {
-            console.error('Biometric setup failed:', error);
+            return { success: false, error: 'Authentication failed' };
+        } catch {
             return { success: false, error: 'Setup failed' };
         }
     }
@@ -124,20 +199,39 @@ export class BiometricService {
                 }
             }
 
-            const { success } = await this.rnBiometrics.simplePrompt({
-                promptMessage: reason,
-                cancelButtonText: 'Cancel'
-            });
+            if (this.rnBiometrics && typeof (this.rnBiometrics as any).simplePrompt === 'function') {
+                const { success } = await (this.rnBiometrics as any).simplePrompt({
+                    promptMessage: reason,
+                    cancelButtonText: 'Cancel'
+                });
 
-            if (success) {
+                if (success) {
+                    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    this.lastAuthAtMs = Date.now();
+                    
+                    // Clear sensitive data after successful auth  
+                    this.clearSensitiveData();
+                    
+                    return { success: true };
+                } else {
+                    return { success: false, error: 'Authentication cancelled' };
+                }
+            }
+
+            // Fallback to Expo LocalAuthentication
+            const res = await LocalAuthentication.authenticateAsync({ promptMessage: reason, cancelLabel: 'Cancel', disableDeviceFallback: false });
+            if (res.success) {
                 await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 this.lastAuthAtMs = Date.now();
+                
+                // Clear sensitive data after successful auth
+                this.clearSensitiveData();
+                
                 return { success: true };
             } else {
                 return { success: false, error: 'Authentication cancelled' };
             }
-        } catch (error) {
-            console.error('Biometric authentication error:', error);
+        } catch {
             return { success: false, error: 'Authentication failed' };
         }
     }

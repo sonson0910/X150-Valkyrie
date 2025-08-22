@@ -2,6 +2,9 @@ import { CARDANO_NETWORKS } from '../constants/index';
 import { ConfigurationService } from './ConfigurationService';
 import { NetworkService } from './NetworkService';
 import { ErrorHandler, ErrorSeverity, ErrorType } from './ErrorHandler';
+import { ApiResponseCacheService } from './cache/ApiResponseCache';
+import { CacheStrategy, CachePriority } from '../utils/IntelligentCache';
+import logger from '../utils/Logger';
 
 /**
  * Service tích hợp với Blockfrost API cho Cardano
@@ -12,12 +15,20 @@ export class CardanoAPIService {
     private configService: ConfigurationService;
     private networkService: NetworkService;
     private errorHandler: ErrorHandler;
+    private apiCache: ApiResponseCacheService;
     private currentNetwork: 'mainnet' | 'testnet' = 'testnet';
 
     private constructor() {
         this.configService = ConfigurationService.getInstance();
         this.networkService = NetworkService.getInstance();
         this.errorHandler = ErrorHandler.getInstance();
+        this.apiCache = ApiResponseCacheService.getInstance({
+            baseUrl: this.getBaseUrl(),
+            defaultTtl: 5 * 60 * 1000, // 5 minutes
+            maxRetries: 3,
+            enableCompression: true,
+            enableDeduplication: true
+        });
     }
 
     public static getInstance(): CardanoAPIService {
@@ -25,6 +36,16 @@ export class CardanoAPIService {
             CardanoAPIService.instance = new CardanoAPIService();
         }
         return CardanoAPIService.instance;
+    }
+
+    /**
+     * Get base URL for current network
+     */
+    private getBaseUrl(): string {
+        const network = this.currentNetwork;
+        return network === 'mainnet' 
+            ? 'https://cardano-mainnet.blockfrost.io/api/v0'
+            : 'https://cardano-testnet.blockfrost.io/api/v0';
     }
 
     /**
@@ -52,7 +73,7 @@ export class CardanoAPIService {
      * Get base URL for current network
      */
     private getBaseURL(): string {
-        // Support preprod via Blockfrost testnet endpoint, or switch to Koios if configured
+        // Support preprod via Blockfrost testnet endpoint
         return this.currentNetwork === 'mainnet'
             ? 'https://cardano-mainnet.blockfrost.io/api/v0'
             : 'https://cardano-testnet.blockfrost.io/api/v0';
@@ -62,7 +83,8 @@ export class CardanoAPIService {
      * Set current network
      */
     setNetwork(network: 'mainnet' | 'testnet'): void {
-        this.currentNetwork = network;
+        // Default to testnet (preprod) unless explicitly mainnet
+        this.currentNetwork = network === 'mainnet' ? 'mainnet' : 'testnet';
     }
 
     /**
@@ -173,7 +195,19 @@ export class CardanoAPIService {
         type: string;
         script: boolean;
     }> {
-        return this.apiCall(`/addresses/${address}`);
+        try {
+            // Use intelligent caching for address info
+            const response = await this.apiCache.getAccountInfo(address);
+            return response.data;
+        } catch (error) {
+            logger.warn('API cache failed, falling back to direct API call', 'CardanoAPIService.getAddressInfo', {
+                address,
+                error: (error as Error).message
+            });
+            
+            // Fallback to direct API call
+            return this.apiCall(`/addresses/${address}`);
+        }
     }
 
     /**
@@ -189,7 +223,19 @@ export class CardanoAPIService {
         block: string;
         data_hash?: string;
     }>> {
-        return this.apiCall(`/addresses/${address}/utxos`);
+        try {
+            // Use intelligent caching for UTXOs
+            const response = await this.apiCache.getAccountUtxos(address);
+            return response.data;
+        } catch (error) {
+            logger.warn('API cache failed, falling back to direct API call', 'CardanoAPIService.getAddressUTXOs', {
+                address,
+                error: (error as Error).message
+            });
+            
+            // Fallback to direct API call
+            return this.apiCall(`/addresses/${address}/utxos`);
+        }
     }
 
     /**
@@ -243,7 +289,19 @@ export class CardanoAPIService {
         redeemer_count: number;
         valid_contract: boolean;
     }> {
-        return this.apiCall(`/txs/${txHash}`);
+        try {
+            // Use intelligent caching for transaction info
+            const response = await this.apiCache.getTransactionInfo(txHash);
+            return response.data;
+        } catch (error) {
+            logger.warn('API cache failed, falling back to direct API call', 'CardanoAPIService.getTransaction', {
+                txHash,
+                error: (error as Error).message
+            });
+            
+            // Fallback to direct API call
+            return this.apiCall(`/txs/${txHash}`);
+        }
     }
 
     /**
@@ -553,7 +611,7 @@ export class CardanoAPIService {
     async buildTransaction(params: any): Promise<any> {
         try {
             // This would integrate with cardano-serialization-lib
-            console.log('Building transaction with params:', params);
+            logger.debug('Building transaction with params', 'CardanoAPIService.buildTransaction', params);
 
             // For now, return a mock transaction structure
             return {
@@ -563,8 +621,78 @@ export class CardanoAPIService {
                 timestamp: new Date().toISOString()
             };
         } catch (error) {
-            console.error('Failed to build transaction:', error);
+            logger.error('Failed to build transaction', 'CardanoAPIService.buildTransaction', error);
             throw error;
+        }
+    }
+
+    // =========================================================================
+    // CACHE MANAGEMENT METHODS
+    // =========================================================================
+
+    /**
+     * Invalidate cache for specific address
+     */
+    async invalidateAddressCache(address: string): Promise<void> {
+        try {
+            await this.apiCache.invalidate(`/accounts/${address}`);
+            await this.apiCache.invalidate(`/accounts/${address}/utxos`);
+            logger.debug('Address cache invalidated', 'CardanoAPIService.invalidateAddressCache', { address });
+        } catch (error) {
+            logger.error('Failed to invalidate address cache', 'CardanoAPIService.invalidateAddressCache', error);
+        }
+    }
+
+    /**
+     * Invalidate cache for specific transaction
+     */
+    async invalidateTransactionCache(txHash: string): Promise<void> {
+        try {
+            await this.apiCache.invalidate(`/txs/${txHash}`);
+            logger.debug('Transaction cache invalidated', 'CardanoAPIService.invalidateTransactionCache', { txHash });
+        } catch (error) {
+            logger.error('Failed to invalidate transaction cache', 'CardanoAPIService.invalidateTransactionCache', error);
+        }
+    }
+
+    /**
+     * Clear all API caches
+     */
+    async clearCache(): Promise<void> {
+        try {
+            await this.apiCache.clearCache();
+            logger.info('API cache cleared', 'CardanoAPIService.clearCache');
+        } catch (error) {
+            logger.error('Failed to clear API cache', 'CardanoAPIService.clearCache', error);
+        }
+    }
+
+    /**
+     * Get cache statistics
+     */
+    getCacheStats() {
+        return this.apiCache.getStats();
+    }
+
+    /**
+     * Preload critical API data
+     */
+    async preloadCriticalData(addresses: string[]): Promise<void> {
+        try {
+            const endpoints = [
+                ...addresses.map(address => ({ endpoint: `/accounts/${address}` })),
+                ...addresses.map(address => ({ endpoint: `/accounts/${address}/utxos` })),
+                { endpoint: '/network' },
+                { endpoint: '/epochs/latest' }
+            ];
+
+            await this.apiCache.preload(endpoints);
+            logger.info('Critical API data preloaded', 'CardanoAPIService.preloadCriticalData', {
+                addressCount: addresses.length,
+                endpointCount: endpoints.length
+            });
+        } catch (error) {
+            logger.error('Failed to preload critical data', 'CardanoAPIService.preloadCriticalData', error);
         }
     }
 }

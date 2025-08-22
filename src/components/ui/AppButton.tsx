@@ -21,7 +21,7 @@ const variantColors: Record<Variant, string[]> = {
 
 export const AppButton: React.FC<Props> = ({ title, variant = 'primary', loading = false, full = false, style, disabled, ...rest }) => {
   const wrap: ViewStyle = {
-    borderRadius: tokens.radii.md,
+    borderRadius: tokens.radii.xl,
     overflow: 'hidden',
     opacity: disabled ? 0.6 : 1,
   };
@@ -29,7 +29,7 @@ export const AppButton: React.FC<Props> = ({ title, variant = 'primary', loading
   return (
     <TouchableOpacity activeOpacity={0.85} disabled={disabled || loading} {...rest} style={style}>
       <LinearGradient colors={variantColors[variant]} style={wrap} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-        <Text style={{ color: textColor, fontWeight: '700', textAlign: 'center', paddingVertical: tokens.spacing.md, letterSpacing: 0.5 }}>
+        <Text style={{ color: textColor, fontWeight: '700', textAlign: 'center', paddingVertical: tokens.spacing.lg, letterSpacing: 0.5 }}>
           {loading ? '' : title}
         </Text>
         {loading && <ActivityIndicator color={textColor} style={{ position: 'absolute', alignSelf: 'center', top: '25%' }} />}

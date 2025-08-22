@@ -1,5 +1,9 @@
 import * as bip39 from 'bip39';
 import CryptoJS from 'crypto-js';
+import { CryptoUtils } from '../utils/CryptoUtils';
+import { environment } from '../config/Environment';
+import { MemoryUtils } from '../utils/MemoryUtils';
+import logger from '../utils/Logger';
 
 /**
  * Valkyrie Mnemonic Transform
@@ -16,9 +20,9 @@ import CryptoJS from 'crypto-js';
  */
 
 export class MnemonicTransformService {
-    private static readonly PBKDF2_ITERATIONS = 100000;
-    private static readonly KEY_BYTES = 32; // 256-bit keystream
-    private static readonly SALT_BYTES = 16; // 128-bit salt
+    private static readonly PBKDF2_ITERATIONS = environment.get('PBKDF2_ITERATIONS');
+    private static readonly KEY_BYTES = environment.get('AES_KEY_SIZE') / 8; // 256-bit keystream
+    private static readonly SALT_BYTES = environment.get('SALT_SIZE') / 8; // 128-bit salt
 
     /**
      * Tạo transformed mnemonic (36 từ) từ mnemonic gốc và mật khẩu
@@ -35,16 +39,11 @@ export class MnemonicTransformService {
         const originalEntropyHex = bip39.mnemonicToEntropy(originalMnemonic); // 64 hex chars
         const originalEntropy = this.hexToBytes(originalEntropyHex); // 32 bytes
 
-        // 2) Tạo salt 16 bytes
-        const saltWA = CryptoJS.lib.WordArray.random(this.SALT_BYTES);
-        const salt = this.wordArrayToBytes(saltWA);
+        // 2) Tạo salt 16 bytes using CryptoUtils
+        const salt = CryptoUtils.generateSalt(this.SALT_BYTES);
 
-        // 3) Dẫn xuất keystream 32 bytes bằng PBKDF2
-        const keyWA = CryptoJS.PBKDF2(password, saltWA, {
-            keySize: this.KEY_BYTES / 4, // CryptoJS expects 32-bit words
-            iterations: this.PBKDF2_ITERATIONS,
-        });
-        const keystream = this.wordArrayToBytes(keyWA); // 32 bytes
+        // 3) Dẫn xuất keystream 32 bytes bằng PBKDF2 using CryptoUtils
+        const keystream = await CryptoUtils.deriveKey(password, salt, this.PBKDF2_ITERATIONS, this.KEY_BYTES);
 
         // 4) XOR entropy với keystream
         const maskedEntropy = this.xorBytes(originalEntropy, keystream);
@@ -56,7 +55,18 @@ export class MnemonicTransformService {
         const saltMnemonic = bip39.entropyToMnemonic(saltHex);
 
         // 6) Gộp 36 từ: 24 (masked) + 12 (salt)
-        return `${maskedMnemonic} ${saltMnemonic}`;
+        const result = `${maskedMnemonic} ${saltMnemonic}`;
+        
+        // Clear sensitive data from memory
+        MemoryUtils.zeroMemory(originalEntropy);
+        MemoryUtils.zeroMemory(salt);
+        MemoryUtils.zeroMemory(keystream);
+        MemoryUtils.zeroMemory(maskedEntropy);
+        MemoryUtils.zeroString(password);
+        MemoryUtils.zeroString(originalMnemonic);
+        
+        logger.debug('Mnemonic transformed successfully', 'MnemonicTransformService.transformMnemonic');
+        return result;
     }
 
     /**
@@ -80,13 +90,8 @@ export class MnemonicTransformService {
         const maskedEntropy = this.hexToBytes(maskedEntropyHex);
         const salt = this.hexToBytes(saltHex);
 
-        // 2) Dẫn xuất keystream 32 bytes bằng PBKDF2
-        const saltWA = this.bytesToWordArray(salt);
-        const keyWA = CryptoJS.PBKDF2(password, saltWA, {
-            keySize: this.KEY_BYTES / 4,
-            iterations: this.PBKDF2_ITERATIONS,
-        });
-        const keystream = this.wordArrayToBytes(keyWA);
+        // 2) Dẫn xuất keystream 32 bytes bằng PBKDF2 using CryptoUtils
+        const keystream = await CryptoUtils.deriveKey(password, salt, this.PBKDF2_ITERATIONS, this.KEY_BYTES);
 
         // 3) XOR để lấy entropy gốc
         const originalEntropy = this.xorBytes(maskedEntropy, keystream);
@@ -94,6 +99,16 @@ export class MnemonicTransformService {
 
         // 4) Convert về mnemonic gốc (24 từ)
         const originalMnemonic = bip39.entropyToMnemonic(originalEntropyHex);
+        
+        // Clear sensitive data from memory
+        MemoryUtils.zeroMemory(maskedEntropy);
+        MemoryUtils.zeroMemory(salt);
+        MemoryUtils.zeroMemory(keystream);
+        MemoryUtils.zeroMemory(originalEntropy);
+        MemoryUtils.zeroString(password);
+        MemoryUtils.zeroString(transformedMnemonic);
+        
+        logger.debug('Mnemonic restored successfully', 'MnemonicTransformService.restoreOriginalMnemonic');
         return originalMnemonic;
     }
 

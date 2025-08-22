@@ -4,15 +4,20 @@ import { InteractionManager, View, Text, TouchableOpacity, Platform, StyleSheet 
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
-// If @expo-google-fonts/inter is not installed, fonts will still load-fail gracefully
-let Inter_400Regular: any, Inter_500Medium: any, Inter_600SemiBold: any, Inter_700Bold: any;
 import { enableScreens, enableFreeze } from 'react-native-screens';
 import * as Sentry from '@sentry/react-native';
+import * as ExpoCrypto from 'expo-crypto';
 
 // Import web polyfills for Cardano compatibility
-import './src/polyfills/web-polyfills';
-import './src/polyfills/mime-buffer-fix';
-import './src/polyfills/cardano-web-fix';
+// Load web-only polyfills conditionally to avoid bundling Node polyfills on native
+if (Platform.OS === 'web') {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('./src/polyfills/web-polyfills');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('./src/polyfills/mime-buffer-fix');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  require('./src/polyfills/cardano-web-fix');
+}
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ToastProvider } from '@contexts/ToastContext';
 import { NetworkService } from './src/services/NetworkService';
@@ -22,26 +27,122 @@ import { WalletStateService } from './src/services/WalletStateService';
 import { RootStackParamList } from './src/types/navigation';
 import { ErrorHandler } from './src/services/ErrorHandler';
 import { BiometricService } from './src/services/BiometricService';
+import { environment } from './src/config/Environment';
+import logger from './src/utils/Logger';
+import DIInitializer from './src/core/di/DIInitializer';
+import { DI, Services, DevTools } from './src/core/di';
+import { preloadCriticalServices } from './src/utils/LazyLoader';
+import { startGlobalMemoryMonitoring } from './src/utils/withMemoryOptimization';
+import { setMemoryTracking } from './src/utils/MemoryOptimizer';
 
-// Import screens
-import WelcomeScreen from './src/screens/WelcomeScreen';
-import SetupWalletScreen from './src/screens/SetupWalletScreen';
-import WalletHomeScreen from './src/screens/WalletHomeScreen';
-import SendTransactionScreen from './src/screens/SendTransactionScreen';
-import ReceiveScreen from './src/screens/ReceiveScreen';
-import TransactionHistoryScreen from './src/screens/TransactionHistoryScreen';
-import SettingsScreen from './src/screens/SettingsScreen';
-import BackupWalletScreen from './src/screens/BackupWalletScreen';
-import RestoreWalletScreen from './src/screens/RestoreWalletScreen';
-import OfflineTransactionScreen from './src/screens/OfflineTransactionScreen';
-import MultiSignatureScreen from './src/screens/MultiSignatureScreen';
-import NFTGalleryScreen from './src/screens/NFTGalleryScreen';
-import DeFiStakingScreen from './src/screens/DeFiStakingScreen';
-import PortfolioAnalyticsScreen from './src/screens/PortfolioAnalyticsScreen';
-import SubmitResultScreen from './src/screens/SubmitResultScreen';
-import GuardianRecoveryScreen from './src/screens/GuardianRecoveryScreen';
-import NameServiceManagerScreen from './src/screens/NameServiceManagerScreen';
-import MainTabs from './src/navigation/MainTabs';
+// =========================================================================
+// LAZY LOADED SCREENS FOR BUNDLE OPTIMIZATION
+// =========================================================================
+
+import { createLazyScreen, preloadCriticalComponents } from './src/utils/DynamicImports';
+
+// Primary screens (preloaded for better UX)
+const WelcomeScreen = createLazyScreen(
+  () => import('./src/screens/WelcomeScreen'),
+  'WelcomeScreen',
+  { preload: true, preloadDelay: 500 }
+);
+
+const SetupWalletScreen = createLazyScreen(
+  () => import('./src/screens/SetupWalletScreen'),
+  'SetupWalletScreen',
+  { preload: true, preloadDelay: 1000 }
+);
+
+const WalletHomeScreen = createLazyScreen(
+  () => import('./src/screens/WalletHomeScreen'),
+  'WalletHomeScreen',
+  { preload: true, preloadDelay: 0 } // Highest priority
+);
+
+// Secondary screens (lazy loaded on demand)
+const SendTransactionScreen = createLazyScreen(
+  () => import('./src/screens/SendTransactionScreen'),
+  'SendTransactionScreen'
+);
+
+const ReceiveScreen = createLazyScreen(
+  () => import('./src/screens/ReceiveScreen'),
+  'ReceiveScreen'
+);
+
+const TransactionHistoryScreen = createLazyScreen(
+  () => import('./src/screens/TransactionHistoryScreen'),
+  'TransactionHistoryScreen'
+);
+
+const SettingsScreen = createLazyScreen(
+  () => import('./src/screens/SettingsScreen'),
+  'SettingsScreen'
+);
+
+// Advanced screens (loaded only when needed)
+const BackupWalletScreen = createLazyScreen(
+  () => import('./src/screens/BackupWalletScreen'),
+  'BackupWalletScreen'
+);
+
+const RestoreWalletScreen = createLazyScreen(
+  () => import('./src/screens/RestoreWalletScreen'),
+  'RestoreWalletScreen'
+);
+
+const OfflineTransactionScreen = createLazyScreen(
+  () => import('./src/screens/OfflineTransactionScreen'),
+  'OfflineTransactionScreen'
+);
+
+const MultiSignatureScreen = createLazyScreen(
+  () => import('./src/screens/MultiSignatureScreen'),
+  'MultiSignatureScreen'
+);
+
+const NFTGalleryScreen = createLazyScreen(
+  () => import('./src/screens/NFTGalleryScreen'),
+  'NFTGalleryScreen'
+);
+
+const DeFiStakingScreen = createLazyScreen(
+  () => import('./src/screens/DeFiStakingScreen'),
+  'DeFiStakingScreen'
+);
+
+const PortfolioAnalyticsScreen = createLazyScreen(
+  () => import('./src/screens/PortfolioAnalyticsScreen'),
+  'PortfolioAnalyticsScreen'
+);
+
+const SubmitResultScreen = createLazyScreen(
+  () => import('./src/screens/SubmitResultScreen'),
+  'SubmitResultScreen'
+);
+
+const GuardianRecoveryScreen = createLazyScreen(
+  () => import('./src/screens/GuardianRecoveryScreen'),
+  'GuardianRecoveryScreen'
+);
+
+const NameServiceManagerScreen = createLazyScreen(
+  () => import('./src/screens/NameServiceManagerScreen'),
+  'NameServiceManagerScreen'
+);
+
+const TransformedMnemonicScreen = createLazyScreen(
+  () => import('./src/screens/TransformedMnemonicScreen'),
+  'TransformedMnemonicScreen'
+);
+
+// Main navigation (lazy loaded)
+const MainTabs = createLazyScreen(
+  () => import('./src/navigation/MainTabs'),
+  'MainTabs',
+  { preload: true, preloadDelay: 1500 }
+);
 
 const Stack = createStackNavigator<RootStackParamList>();
 
@@ -49,13 +150,74 @@ const Stack = createStackNavigator<RootStackParamList>();
 enableScreens(true);
 enableFreeze(true);
 
-// Sentry init
-Sentry.init({
-  dsn: process.env.SENTRY_DSN || 'https://344b00dc27064c50b124dd7cd276a08e@o4509841616338944.ingest.us.sentry.io/4509841619746816',
-  tracesSampleRate: __DEV__ ? 0 : 0.1,
-  enableAutoSessionTracking: true,
-  debug: false,
-});
+// Sentry init with comprehensive security configuration
+if (environment.get('ENABLE_SENTRY')) {
+  const sentryDsn = environment.get('SENTRY_DSN');
+  if (sentryDsn) {
+    try {
+      Sentry.init({
+        dsn: sentryDsn,
+        tracesSampleRate: environment.isDevelopment() ? 0 : 0.1,
+        enableAutoSessionTracking: true,
+        debug: environment.isDevelopment(),
+        environment: environment.get('ENVIRONMENT'),
+        release: `${environment.get('APP_NAME')}@${environment.get('APP_VERSION')}`,
+        dist: environment.get('BUILD_NUMBER'),
+        beforeSend: (event) => {
+          // Remove all sensitive data from events
+          if (event.user) {
+            delete event.user.ip_address;
+            delete event.user.email;
+            delete event.user.username;
+          }
+          
+          // Remove sensitive data from breadcrumbs
+          if (event.breadcrumbs) {
+            event.breadcrumbs = event.breadcrumbs.map(breadcrumb => {
+              if (breadcrumb.data) {
+                // Remove any data that might contain secrets or PII
+                const sanitizedData = { ...breadcrumb.data };
+                delete sanitizedData.password;
+                delete sanitizedData.mnemonic;
+                delete sanitizedData.privateKey;
+                delete sanitizedData.address;
+                delete sanitizedData.email;
+                breadcrumb.data = sanitizedData;
+              }
+              return breadcrumb;
+            });
+          }
+          
+          // Remove sensitive context data
+          if (event.contexts) {
+            delete event.contexts.device;
+            delete event.contexts.os;
+          }
+          
+          return event;
+        },
+        integrations: [
+          // ReactNativeTracing integration for performance monitoring
+          // new Sentry.ReactNativeTracing({
+          //   tracingOrigins: ['localhost', /^https:\/\/api\.blockfrost\.io\/api/],
+          //   enableNativeFramesTracking: !environment.isDevelopment(),
+          // }),
+        ],
+      });
+      
+      logger.info('Sentry initialized successfully', 'App.sentryInit', { 
+        environment: environment.get('ENVIRONMENT'),
+        version: environment.get('APP_VERSION')
+      });
+    } catch (error) {
+      logger.error('Failed to initialize Sentry', 'App.sentryInit', error);
+    }
+  } else {
+    logger.warn('Sentry enabled but DSN not configured', 'App.sentryInit');
+  }
+} else {
+  logger.debug('Sentry disabled via environment configuration', 'App.sentryInit');
+}
 
 // Error Boundary Component
 class ErrorBoundary extends React.Component<
@@ -72,7 +234,7 @@ class ErrorBoundary extends React.Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('App Error Boundary caught an error:', error, errorInfo);
+    logger.error('App Error Boundary caught an error', 'ErrorBoundary', { error, errorInfo });
   }
 
   render() {
@@ -112,42 +274,178 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (__DEV__) console.log('App component mounted');
+    if (__DEV__) logger.debug('App component mounted', 'App.useEffect');
+    // Ensure Buffer polyfill is present on native (Expo Go on Android may miss it)
+    try {
+      const g: any = global as any;
+      if (typeof g.Buffer === 'undefined') {
+        g.Buffer = require('buffer').Buffer;
+      }
+      // Ensure crypto.getRandomValues exists (used by bip39/@noble)
+      if (!g.crypto) g.crypto = {} as any;
+      if (typeof g.crypto.getRandomValues !== 'function') {
+        g.crypto.getRandomValues = (typedArray: Uint8Array) => {
+          const bytes: Uint8Array = ExpoCrypto.getRandomBytes(typedArray.length);
+          typedArray.set(bytes);
+          return typedArray;
+        };
+      }
+    } catch {}
     initializeApp();
   }, []);
 
   const initializeApp = async () => {
     try {
-      if (__DEV__) console.log('Initializing app...');
+      if (__DEV__) logger.debug('Initializing app...', 'App.initializeApp');
       
-      // Initialize error handler
-      ErrorHandler.getInstance();
+      // 1. Initialize Dependency Injection System FIRST
+      if (__DEV__) logger.debug('Initializing DI container...', 'App.initializeApp');
       
-      // Initialize configuration, network and wallet state in parallel
-      await Promise.allSettled([
-        ConfigurationService.getInstance().initialize(),
-        NetworkService.getInstance().initialize(),
-        WalletStateService.getInstance().initialize(),
-      ]);
+      try {
+        const diResult = await DIInitializer.safeInitialize();
+        
+        if (!diResult.success) {
+          logger.error('DI initialization failed, using fallback services', 'App.initializeApp', { error: diResult.error });
+        } else {
+          if (diResult.fallbackMode) {
+            logger.warn('DI initialized in fallback mode', 'App.initializeApp');
+          } else {
+            logger.info('DI system initialized successfully', 'App.initializeApp', {
+              serviceCount: DI.serviceCount
+            });
+            
+            // Log DI diagnostics in development
+            if (__DEV__) {
+              const diagnostics = DevTools.getDiagnostics();
+              logger.debug('DI diagnostics', 'App.initializeApp', diagnostics);
+            }
+          }
+        }
+      } catch (diError) {
+        logger.error('DI initialization completely failed, using legacy services', 'App.initializeApp', diError);
+      }
+      
+      // 2. Initialize critical services (DI or fallback)
+      if (DI.isInitialized) {
+        // Use DI services where possible
+        try {
+          const errorHandler = Services.errorHandler;
+          const config = Services.config;
+          const network = Services.network;
+          
+          // Initialize services that need explicit initialization
+          if (config && typeof (config as any).initialize === 'function') {
+            await (config as any).initialize();
+          }
+          if (network && typeof (network as any).initialize === 'function') {
+            await (network as any).initialize();
+          }
+          
+          if (__DEV__) logger.debug('DI services initialized', 'App.initializeApp', {
+            errorHandler: !!errorHandler,
+            config: !!config,
+            network: !!network
+          });
+          
+          // 3. Start background preloading of critical services
+          if (__DEV__) logger.debug('Starting background service preload...', 'App.initializeApp');
+          preloadCriticalServices().catch(error => {
+            logger.warn('Background service preload failed', 'App.initializeApp', error);
+          });
+          
+          // 4. Initialize memory monitoring
+          if (__DEV__) logger.debug('Starting memory monitoring...', 'App.initializeApp');
+          setMemoryTracking(__DEV__); // Enable memory tracking in development
+          const stopMemoryMonitoring = startGlobalMemoryMonitoring(30000); // Monitor every 30 seconds
+          
+          // Store cleanup function globally for app termination
+          (global as any).__memoryMonitoringCleanup = stopMemoryMonitoring;
+          
+          // 5. Preload critical components for better UX and bundle optimization
+          if (__DEV__) logger.debug('Preloading critical components...', 'App.initializeApp');
+          preloadCriticalComponents();
+          
+        } catch (diServiceError) {
+          logger.warn('DI service initialization failed, using fallback', 'App.initializeApp', diServiceError);
+          // Fall through to legacy initialization
+        }
+      }
+      
+      // Legacy service initialization (fallback or if DI failed)
+      if (!DI.isInitialized) {
+        logger.debug('Using legacy service initialization', 'App.initializeApp');
+        
+        // Initialize error handler
+        ErrorHandler.getInstance();
+        
+        // Initialize configuration, network and wallet state in parallel
+        await Promise.allSettled([
+          ConfigurationService.getInstance().initialize(),
+          NetworkService.getInstance().initialize(),
+          WalletStateService.getInstance().initialize(),
+        ]);
+      }
 
-      // Defer biometric probing until after interactions to avoid blocking first paint
+      // 3. Persist Blockfrost API key from Expo extra to both networks if provided
+      try {
+        const extra: any = (require('expo-constants') as any)?.default?.expoConfig?.extra || (require('expo-constants') as any)?.default?.manifest?.extra || {};
+        const bfKey: string | undefined = extra?.blockfrostApiKey;
+        if (bfKey) {
+          let cfg: any;
+          if (DI.isInitialized) {
+            try {
+              cfg = Services.config;
+            } catch {
+              cfg = ConfigurationService.getInstance();
+            }
+          } else {
+            cfg = ConfigurationService.getInstance();
+          }
+          
+          if (cfg && typeof cfg.setApiKey === 'function') {
+            await cfg.setApiKey('blockfrost', 'testnet', bfKey);
+            await cfg.setApiKey('blockfrost', 'mainnet', bfKey);
+            if (__DEV__) logger.debug('Applied Blockfrost API key from Expo extra', 'App.initializeApp');
+          }
+        }
+      } catch (bfError) {
+        logger.warn('Failed to apply Blockfrost API key', 'App.initializeApp', bfError);
+      }
+
+      // 4. Defer biometric probing until after interactions to avoid blocking first paint
       InteractionManager.runAfterInteractions(async () => {
         try {
-          const biometricService = BiometricService.getInstance();
-          const biometric = await biometricService.checkBiometricSupport();
-          if (__DEV__ && biometric.isAvailable) {
-            // eslint-disable-next-line no-console
-            console.log('Biometric available:', biometric.type);
+          let biometricService: any;
+          if (DI.isInitialized) {
+            try {
+              biometricService = Services.biometric;
+            } catch {
+              biometricService = BiometricService.getInstance();
+            }
+          } else {
+            biometricService = BiometricService.getInstance();
           }
-        } catch {}
+          
+          if (biometricService && typeof biometricService.checkBiometricSupport === 'function') {
+            const biometric = await biometricService.checkBiometricSupport();
+            if (__DEV__ && biometric.isAvailable) {
+              logger.debug('Biometric available', 'App.initializeApp', { type: biometric.type });
+            }
+          }
+        } catch (bioError) {
+          logger.warn('Biometric initialization failed', 'App.initializeApp', bioError);
+        }
       });
       
-      if (__DEV__) console.log('App initialization completed');
+      if (__DEV__) logger.debug('App initialization completed', 'App.initializeApp', {
+        diInitialized: DI.isInitialized,
+        serviceCount: DI.isInitialized ? DI.serviceCount : 'N/A'
+      });
       setIsInitialized(true);
     } catch (error) {
-      console.error('App initialization failed:', error);
+      logger.error('App initialization failed', 'App.initializeApp', error);
       setError(error instanceof Error ? error.message : 'Unknown error');
-      // Continue without biometric
+      // Continue even if initialization failed
       setIsInitialized(true);
     }
   };
@@ -204,6 +502,7 @@ export default function App() {
               <Stack.Screen name="Settings" component={SettingsScreen} />
               <Stack.Screen name="BackupWallet" component={BackupWalletScreen} />
               <Stack.Screen name="RestoreWallet" component={RestoreWalletScreen} />
+              <Stack.Screen name="TransformedMnemonic" component={TransformedMnemonicScreen} />
               <Stack.Screen name="OfflineTransaction" component={OfflineTransactionScreen} />
               <Stack.Screen name="MultiSignature" component={MultiSignatureScreen} />
               <Stack.Screen name="NFTGallery" component={NFTGalleryScreen} />

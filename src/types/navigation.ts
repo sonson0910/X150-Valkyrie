@@ -10,6 +10,7 @@ export type RootStackParamList = {
     OfflineTransaction: undefined;
     BackupWallet: undefined;
     RestoreWallet: undefined;
+    TransformedMnemonic: undefined;
     TransactionHistory: undefined;
     Settings: undefined;
     GuardianRecovery: undefined;

@@ -8,6 +8,8 @@ import {
   RefreshControl,
   Dimensions,
 } from 'react-native';
+import { useAsyncEffect, useSafeState, useMemoryCleanup } from '../utils/MemoryOptimizer';
+import { withScreenMemoryOptimization } from '../utils/withMemoryOptimization';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
@@ -38,11 +40,15 @@ interface Props {
 const { width } = Dimensions.get('window');
 
 const WalletHomeScreen: React.FC<Props> = ({ navigation }) => {
-  const [balance, setBalance] = useState('0');
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
-  const [recentTransactions, setRecentTransactions] = useState<TransactionData[]>([]);
+  // Memory-optimized state with safe setters
+  const [balance, setBalance, isMounted] = useSafeState('0', 'WalletHomeScreen');
+  const [isRefreshing, setIsRefreshing] = useSafeState(false, 'WalletHomeScreen');
+  const [isLoading, setIsLoading] = useSafeState(true, 'WalletHomeScreen');
+  const [isLoadingTransactions, setIsLoadingTransactions] = useSafeState(false, 'WalletHomeScreen');
+  const [recentTransactions, setRecentTransactions] = useSafeState<TransactionData[]>([], 'WalletHomeScreen');
+  
+  // Memory cleanup utilities
+  const { addSubscription, isMounted: isComponentMounted } = useMemoryCleanup('WalletHomeScreen');
 
   // Get current wallet address from wallet state
   const getCurrentWalletAddress = async (): Promise<string> => {
@@ -59,33 +65,37 @@ const WalletHomeScreen: React.FC<Props> = ({ navigation }) => {
     return 'addr1qx2fxv2umyhttkxyxp8x0dlpdt3k6cwng5pxj3jhsydzer';
   };
 
-  useEffect(() => {
-    // Load real wallet data
-    const loadWalletData = async () => {
-      try {
-        setIsLoading(true);
-        
-        // Use real wallet data service
-        const walletDataService = WalletDataService.getInstance();
-        const currentAddress = await getCurrentWalletAddress();
-        
-        const [currentBalance, transactions] = await Promise.all([
-          walletDataService.getRealBalance(currentAddress),
-          walletDataService.getRealTransactionHistory(currentAddress, 10)
-        ]);
-        
-        setBalance(currentBalance);
-        setRecentTransactions(transactions);
-        
-        setIsLoading(false);
-      } catch (error) {
+  // Memory-safe async effect
+  useAsyncEffect(async () => {
+    try {
+      setIsLoading(true);
+      
+      // Use real wallet data service
+      const walletDataService = WalletDataService.getInstance();
+      const currentAddress = await getCurrentWalletAddress();
+      
+      // Only proceed if component is still mounted
+      if (!isComponentMounted()) return;
+      
+      const [currentBalance, transactions] = await Promise.all([
+        walletDataService.getRealBalance(currentAddress),
+        walletDataService.getRealTransactionHistory(currentAddress, 10)
+      ]);
+      
+      // Check again before setting state
+      if (!isComponentMounted()) return;
+      
+      setBalance(currentBalance);
+      setRecentTransactions(transactions);
+      setIsLoading(false);
+      
+    } catch (error) {
+      if (isComponentMounted()) {
         console.error('Failed to load wallet data:', error);
         setIsLoading(false);
       }
-    };
-
-    loadWalletData();
-  }, []);
+    }
+  }, [], 'WalletHomeScreen');
 
   const onRefresh = async () => {
     try {
@@ -218,7 +228,7 @@ const WalletHomeScreen: React.FC<Props> = ({ navigation }) => {
             <Card glow style={{ marginBottom: tokens.spacing.xl }}>
               <Text style={{ color: tokens.palette.textSecondary, marginBottom: tokens.spacing.xs }}>Total Balance</Text>
               <Text style={{ color: tokens.palette.primary, fontSize: 36, fontWeight: '800', letterSpacing: 0.5 }}>{balance} ADA</Text>
-              <Text style={{ color: tokens.palette.textSecondary, marginTop: tokens.spacing.xs }}>≈ $4,227.37 USD</Text>
+              {/* Hide fiat estimate when network/API uncertain */}
               <View style={{ height: tokens.spacing.lg }} />
               <ResponsiveGrid>
                 <GradientButton title="Send" onPress={() => navigation.navigate('SendTransaction' as any)} />
@@ -478,4 +488,9 @@ const styles = StyleSheet.create({
   },
 });
 
-export default WalletHomeScreen;
+// Export with memory optimization
+export default withScreenMemoryOptimization(WalletHomeScreen, {
+  componentName: 'WalletHomeScreen',
+  enablePerformanceMonitoring: true,
+  maxLifetimeWarning: 600000 // 10 minutes
+});

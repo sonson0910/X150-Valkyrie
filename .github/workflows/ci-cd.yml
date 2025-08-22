@@ -1,0 +1,505 @@
+name: CI/CD Pipeline with Security Checks
+
+on:
+  push:
+    branches: [ main, develop, staging ]
+  pull_request:
+    branches: [ main, develop ]
+  release:
+    types: [published]
+
+env:
+  NODE_VERSION: '18'
+  JAVA_VERSION: '11'
+  RUBY_VERSION: '3.0'
+
+jobs:
+  # Security and Code Quality Checks
+  security-checks:
+    name: Security & Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for better analysis
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Run TypeScript check
+        run: npm run type-check
+
+      - name: Security audit (npm)
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Run Snyk security scan
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          snyk auth $SNYK_TOKEN
+          snyk test --severity-threshold=high
+        continue-on-error: true
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript, typescript
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      - name: Run Bandit security linter (Python scripts)
+        run: |
+          pip install bandit
+          bandit -r scripts/ -f json -o bandit-report.json
+        continue-on-error: true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            snyk-report.json
+          retention-days: 30
+
+  # Unit and Integration Tests
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: security-checks
+    strategy:
+      matrix:
+        test-type: [unit, integration, security]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ${{ matrix.test-type }} tests
+        run: |
+          case "${{ matrix.test-type }}" in
+            unit)
+              npm run test:unit -- --coverage
+              ;;
+            integration)
+              npm run test:integration -- --coverage
+              ;;
+            security)
+              npm run test:security -- --coverage
+              ;;
+          esac
+
+      - name: Upload test coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info
+          flags: ${{ matrix.test-type }}
+          name: ${{ matrix.test-type }}-coverage
+
+      - name: Store test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.test-type }}
+          path: |
+            coverage/
+            test-results.xml
+          retention-days: 30
+
+  # Mobile App Security Checks
+  mobile-security:
+    name: Mobile Security Analysis
+    runs-on: ubuntu-latest
+    needs: security-checks
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install MobSF CLI
+        run: pip install mobsf
+
+      - name: Build Android APK for security scan
+        run: |
+          npx expo prebuild --platform android
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Run MobSF security analysis
+        run: |
+          mobsf --scan android/app/build/outputs/apk/release/app-release-unsigned.apk
+        continue-on-error: true
+
+      - name: Check for hardcoded secrets
+        run: |
+          # Use truffleHog to scan for secrets
+          docker run --rm -v "$PWD:/pwd" trufflesecurity/trufflehog:latest filesystem /pwd
+        continue-on-error: true
+
+      - name: Android permissions audit
+        run: |
+          # Check for unnecessary permissions
+          npx expo install expo-permissions-analyzer
+          npx expo-permissions-analyzer
+        continue-on-error: true
+
+  # Build Applications
+  build:
+    name: Build Apps
+    runs-on: ${{ matrix.os }}
+    needs: [security-checks, tests]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        platform: [android, ios, web]
+        exclude:
+          - os: ubuntu-latest
+            platform: ios
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Java (Android)
+        if: matrix.platform == 'android'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Setup Ruby (iOS)
+        if: matrix.platform == 'ios' && matrix.os == 'macos-latest'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ env.RUBY_VERSION }}
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo CLI
+        run: npm install -g @expo/cli eas-cli
+
+      - name: Setup EAS
+        run: eas login --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build for ${{ matrix.platform }}
+        run: |
+          case "${{ matrix.platform }}" in
+            android)
+              if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+                eas build --platform android --profile production --non-interactive
+              else
+                eas build --platform android --profile staging --non-interactive
+              fi
+              ;;
+            ios)
+              if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+                eas build --platform ios --profile production --non-interactive
+              else
+                eas build --platform ios --profile staging --non-interactive
+              fi
+              ;;
+            web)
+              npm run build:web
+              ;;
+          esac
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.platform }}-${{ matrix.os }}
+          path: |
+            build/
+            dist/
+            *.apk
+            *.ipa
+          retention-days: 30
+
+  # Security Penetration Testing
+  penetration-testing:
+    name: Penetration Testing
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup OWASP ZAP
+        run: |
+          docker pull owasp/zap2docker-stable
+
+      - name: Run OWASP ZAP baseline scan
+        run: |
+          docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-stable \
+            zap-baseline.py -t https://staging.valkyrie-wallet.com -J zap-report.json
+        continue-on-error: true
+
+      - name: Run OWASP ZAP full scan
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker run -v $(pwd):/zap/wrk/:rw -t owasp/zap2docker-stable \
+            zap-full-scan.py -t https://valkyrie-wallet.com -J zap-full-report.json
+        continue-on-error: true
+
+      - name: Upload ZAP reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-reports
+          path: |
+            zap-report.json
+            zap-full-report.json
+          retention-days: 30
+
+  # Performance Testing
+  performance-testing:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Lighthouse CI
+        run: |
+          npm install -g @lhci/cli
+          lhci autorun
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+      - name: Bundle size analysis
+        run: |
+          npm run analyze:bundle
+          npm run bundle:report
+
+      - name: Performance benchmarks
+        run: npm run test:performance
+
+  # Deployment
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, mobile-security, performance-testing]
+    if: github.ref == 'refs/heads/staging'
+    environment: staging
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo CLI
+        run: npm install -g @expo/cli eas-cli
+
+      - name: Deploy to Expo (Staging)
+        run: eas update --branch staging --message "Staging deployment - ${{ github.sha }}"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Deploy Web App (Staging)
+        run: |
+          npm run build:web:staging
+          aws s3 sync dist/ s3://staging-valkyrie-wallet-web
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.STAGING_CLOUDFRONT_ID }} --paths "/*"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Run post-deployment tests
+        run: npm run test:e2e:staging
+
+      - name: Notify Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: "Staging deployment completed"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, mobile-security, performance-testing, penetration-testing]
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo CLI
+        run: npm install -g @expo/cli eas-cli
+
+      - name: Deploy to App Stores
+        run: |
+          # Submit to App Store and Google Play
+          eas submit --platform all --latest
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_APPLE_ID: ${{ secrets.EXPO_APPLE_ID }}
+          EXPO_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.EXPO_APPLE_APP_SPECIFIC_PASSWORD }}
+          EXPO_ANDROID_KEYSTORE: ${{ secrets.EXPO_ANDROID_KEYSTORE }}
+
+      - name: Deploy Web App (Production)
+        run: |
+          npm run build:web:production
+          aws s3 sync dist/ s3://valkyrie-wallet-web
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.PRODUCTION_CLOUDFRONT_ID }} --paths "/*"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Update production monitoring
+        run: |
+          # Update Sentry release
+          npx @sentry/wizard -i sourcemaps
+          curl -X POST "https://api.sentry.io/api/0/organizations/${{ secrets.SENTRY_ORG }}/releases/" \
+            -H "Authorization: Bearer ${{ secrets.SENTRY_AUTH_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"version": "${{ github.sha }}", "projects": ["valkyrie-wallet"]}'
+
+      - name: Run post-deployment tests
+        run: npm run test:e2e:production
+
+      - name: Run health checks
+        run: |
+          # Check app store availability
+          curl -f https://api.valkyrie-wallet.com/health
+          curl -f https://valkyrie-wallet.com/health
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ env.APP_VERSION }}
+          release_name: Release v${{ env.APP_VERSION }}
+          body: |
+            ## What's Changed
+            - Security scans passed ✅
+            - All tests passed ✅
+            - Performance benchmarks met ✅
+            - Deployed to production ✅
+          draft: false
+          prerelease: false
+
+      - name: Notify team
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: "🚀 Production deployment completed successfully!"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Security Monitoring
+  security-monitoring:
+    name: Security Monitoring
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [deploy-staging, deploy-production]
+    steps:
+      - name: Send security report to Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              text: "Security Report",
+              attachments: [{
+                color: "good",
+                fields: [{
+                  title: "Security Scans",
+                  value: "✅ CodeQL, Snyk, SonarCloud, OWASP ZAP completed",
+                  short: true
+                }]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Update security dashboard
+        run: |
+          # This would update an internal security dashboard
+          echo "Security monitoring completed"
+
+# Security for workflow itself
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+

@@ -1,3 +1,44 @@
+// =========================================================================
+// EXPORT CENTRALIZED CONSTANTS
+// =========================================================================
+
+// Export crypto constants
+export {
+    CARDANO_DERIVATION,
+    MNEMONIC_CONSTANTS,
+    ENCRYPTION_CONSTANTS,
+    CARDANO_FEES,
+    SIGNATURE_CONSTANTS,
+    CERTIFICATE_CONSTANTS,
+    SECURITY_LIMITS,
+    CRYPTO_ALGORITHMS,
+    hardenIndex,
+    buildDerivationPath,
+    formatDuration
+} from './CryptoConstants';
+
+// Export config constants (with CONFIG_BLUETOOTH_CONSTANTS renamed to avoid conflict)
+export {
+    NETWORK_CONSTANTS,
+    BLUETOOTH_CONSTANTS as CONFIG_BLUETOOTH_CONSTANTS, 
+    UI_CONSTANTS,
+    STORAGE_CONSTANTS,
+    PORTFOLIO_CONSTANTS,
+    TRANSACTION_LIMITS,
+    BIOMETRIC_CONSTANTS,
+    NFT_CONSTANTS,
+    DEFI_CONSTANTS,
+    MONITORING_CONSTANTS,
+    DEV_CONSTANTS,
+    getTimeout,
+    getCacheTTL,
+    isValidTransactionAmount
+} from './ConfigConstants';
+
+// =========================================================================
+// CARDANO NETWORK CONFIGURATION
+// =========================================================================
+
 export const CARDANO_NETWORKS = {
     MAINNET: {
         name: 'mainnet',
@@ -28,6 +69,7 @@ export const WALLET_CONSTANTS = {
     DEFAULT_TX_FEE: '200000', // 0.2 ADA
 } as const;
 
+// Keep the original BLUETOOTH_CONSTANTS with progress monitoring
 export const BLUETOOTH_CONSTANTS = {
     SERVICE_UUID: 'valkyrie-cardano-wallet',
     TX_CHARACTERISTIC_UUID: 'tx-transfer',
@@ -36,7 +78,10 @@ export const BLUETOOTH_CONSTANTS = {
     CHUNK_SIZE_BLE: 180,
     ACK_TIMEOUT_MS: 2000,
     RESEND_LIMIT: 3,
-    PROTOCOL_VERSION: '1.0'
+    PROTOCOL_VERSION: '1.0',
+    // Progress monitoring
+    PROGRESS_UPDATE_INTERVAL: 500,    // 0.5 seconds
+    PROGRESS_TIMEOUT: 30000,          // 30 seconds
 } as const;
 
 export const CYBERPUNK_COLORS = {

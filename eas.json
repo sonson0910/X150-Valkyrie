@@ -19,7 +19,11 @@
       "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "NPM_CONFIG_PRODUCTION": "true",
+        "npm_config_legacy_peer_deps": "true"
+      }
     }
   },
   "submit": {

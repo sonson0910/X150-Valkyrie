@@ -10,7 +10,7 @@ type Props = ViewProps & {
 export const Card: React.FC<Props> = ({ variant = 'solid', glow = false, style, children, ...rest }) => {
   const base = {
     backgroundColor: tokens.palette.surface,
-    borderRadius: tokens.radii.lg,
+    borderRadius: tokens.radii.xl,
     borderWidth: variant === 'outline' ? 1 : 0,
     borderColor: tokens.palette.border,
     padding: tokens.spacing.lg,
